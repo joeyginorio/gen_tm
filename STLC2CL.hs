@@ -51,3 +51,22 @@ toLC (ST.TmSnd s)     = TmApp s' t
 toLC (ST.TmApp s t)   = TmApp s' t'
                         where s' = toLC s
                               t' = toLC t
+
+
+{- ===================== Stage 2: Lambda elimination ======================== -}
+
+-- Fresh variables in a term
+fvs :: Term -> Set Id
+fvs (TmVar x)       = insert x empty
+fvs (TmFun x tm)    = delete x $ fvs tm
+fvs (TmApp tm1 tm2) = union (fvs tm1) (fvs tm2)
+
+toCL :: Term -> Maybe CL.Term
+toCL (TmFun x (TmVar y)) | x == y    = return $ CL.App (CL.App CL.S CL.K) CL.K
+                         | otherwise = Nothing
+toCL (TmFun x t)         | not $ member x (fvs t) = do t' <- toCL t
+                                                       return $ CL.App CL.K t'
+                         | otherwise              = Nothing
+toCL (TmApp s t)         = do s' <- toCL s
+                              t' <- toCL t
+                              return $ CL.App (CL.App CL.S s') t'
