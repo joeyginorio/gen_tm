@@ -17,7 +17,6 @@ data Term = TmUnit                          -- Unit              {Intro.}
           | TmVar  Id                       -- Variables
           | TmProd Term Term                -- Products
           | TmFun  Id Type Term             -- Functions
-          | TmLet  Term Term                -- Let statements    {Elim.}
           | TmIf   Term Term Term           -- If statements
           | TmFst  Term                     -- First projection
           | TmSnd  Term                     -- Second projection
@@ -39,7 +38,6 @@ type Context = [Binding]
 --                                {Typechecker}
 
 data Error = EVar  Id         -- Variable not in context
-           | ELet  Term       -- First term isn't Unit type
            | EIf1  Term       -- First term isn't Bool type
            | EIf2  Term Term  -- Second and third term aren't the same type
            | EProd Term       -- Term isn't product type
@@ -65,12 +63,6 @@ tyCheck (TmProd tm1 tm2)   = do ty1 <- tyCheck tm1
                                 return $ TyProd ty1 ty2
 tyCheck (TmFun x ty1 tm)   = do ty2 <- local ((x,ty1):) $ tyCheck tm
                                 return $ TyFun ty1 ty2
-tyCheck (TmLet tm1 tm2)    = do ty1 <- tyCheck tm1
-                                lift $ if ty1 == TyUnit
-                                         then Left $ ELet tm1
-                                         else Right ()
-                                ty2 <- tyCheck tm2
-                                return ty2
 tyCheck (TmIf tm1 tm2 tm3) = do ty1 <- tyCheck tm1
                                 lift $ if ty1 == TyBool
                                          then Left $ EIf1 tm1
@@ -125,7 +117,6 @@ fvs (TmFalse)          = empty
 fvs (TmVar x)          = insert x empty
 fvs (TmProd tm1 tm2)   = union (fvs tm1) (fvs tm2)
 fvs (TmFun x _ tm)     = delete x $ fvs tm
-fvs (TmLet tm1 tm2)    = union (fvs tm1) (fvs tm2)
 fvs (TmIf tm1 tm2 tm3) = union (fvs tm1) $ union (fvs tm2) (fvs tm3)
 fvs (TmFst tm)         = fvs tm
 fvs (TmSnd tm)         = fvs tm
@@ -142,7 +133,6 @@ aconv x y (TmVar z)        | x == z    = TmVar y
 aconv x y (TmProd tm1 tm2) = TmProd (aconv x y tm1) (aconv x y tm2)
 aconv x y (TmFun z ty tm)  | x == z    = TmFun y ty (aconv x y tm)
                            | otherwise = TmFun z ty (aconv x y tm)
-aconv x y (TmLet tm1 tm2)  = TmLet (aconv x y tm1) (aconv x y tm2)
 aconv x y (TmFst tm)       = TmFst (aconv x y tm)
 aconv x y (TmSnd tm)       = TmSnd (aconv x y tm)
 aconv x y (TmApp tm1 tm2)  = TmApp (aconv x y tm1) (aconv x y tm2)
@@ -169,9 +159,6 @@ subst x t s@(TmFun y ty tm)  | x == y           = return $ TmFun y ty tm
                                                      local tail (subst x t s')
                              | otherwise        = do tm' <- subst x t tm
                                                      return $ TmFun y ty tm'
-subst x t (TmLet tm1 tm2)    = do tm1' <- subst x t tm1
-                                  tm2' <- subst x t tm2
-                                  return $ TmLet tm1' tm2'
 subst x t (TmIf tm1 tm2 tm3) = do tm1' <- subst x t tm1
                                   tm2' <- subst x t tm2
                                   tm3' <- subst x t tm3
@@ -186,9 +173,6 @@ subst x t (TmApp tm1 tm2)    = do tm1' <- subst x t tm1
 
 -- The actual interpreter, using call-by-name evaluation order
 eval :: Term -> STerm
-eval (TmLet TmUnit tm)           = eval tm
-eval (TmLet tm1 tm2)             = do tm1' <- eval tm1
-                                      eval $ TmLet tm1' tm2
 eval (TmIf TmTrue tm2 _)         = eval tm2
 eval (TmIf TmFalse _ tm3)        = eval tm3
 eval (TmIf tm1 tm2 tm3)          = do tm1' <- eval tm1
