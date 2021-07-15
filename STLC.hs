@@ -2,7 +2,7 @@
    =======
    Defines syntax and semantics of STLC. -}
 
-module PCF where
+module STLC where
 
 import Data.Set (Set, empty, delete, insert, union, member)
 import Control.Monad
