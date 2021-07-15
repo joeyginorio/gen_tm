@@ -1,6 +1,6 @@
-{- PCF.hs
-   ======
-   Defines syntax and semantics of PCF. -}
+{- STLC.hs
+   =======
+   Defines syntax and semantics of STLC. -}
 
 module PCF where
 
