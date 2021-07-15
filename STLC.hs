@@ -17,7 +17,7 @@ data Term = TmUnit                          -- Unit              {Intro.}
           | TmVar  Id                       -- Variables
           | TmProd Term Term                -- Products
           | TmFun  Id Type Term             -- Functions
-          | TmIf   Term Term Term           -- If statements
+          | TmIf   Term Term Term           -- If statements     {Elim.}
           | TmFst  Term                     -- First projection
           | TmSnd  Term                     -- Second projection
           | TmApp  Term Term                -- Application
