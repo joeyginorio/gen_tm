@@ -6,6 +6,8 @@
          untyped lambda calculus.
      (ii) Standard translation from untyped lambda calculus to CL. -}
 
+module STLC2CL where
+
 import Data.Set (Set, empty, delete, insert, union, member)
 import qualified STLC as ST
 import qualified CL as CL
@@ -28,8 +30,24 @@ data Term = TmVar Id
 
 -- STLC to LC (applying type erasure and desugaring)
 toLC :: ST.Term -> Term
-toLC (ST.TmUnit)         = TmFun "x" (TmVar "x")
-toLC (ST.TmTrue)         = TmFun "x" (TmFun "y" (TmVar "x"))
-toLC (ST.TmFalse)        = TmFun "x" (TmFun "y" (TmVar "y"))
-toLC (ST.TmVar x)        = TmVar x
--- toLC (ST.TmProd tm1 tm2) = 
+toLC (ST.TmUnit)      = TmFun "x" (TmVar "x")
+toLC (ST.TmTrue)      = TmFun "x" (TmFun "y" (TmVar "x"))
+toLC (ST.TmFalse)     = TmFun "x" (TmFun "y" (TmVar "y"))
+toLC (ST.TmVar x)     = TmVar x
+toLC (ST.TmProd s t)  = TmFun "z" (TmApp (TmApp (TmVar "z") s') t')
+                        where s' = toLC s
+                              t' = toLC t
+toLC (ST.TmFun x _ t) = TmFun x (toLC t)
+toLC (ST.TmIf s t u)  = TmApp (TmApp s' t') u'
+                        where s' = toLC s
+                              t' = toLC t
+                              u' = toLC u
+toLC (ST.TmFst s)     = TmApp s' t
+                        where s' = toLC s
+                              t  = TmFun "x" (TmFun "y" (TmVar "x"))
+toLC (ST.TmSnd s)     = TmApp s' t
+                        where s' = toLC s
+                              t  = TmFun "x" (TmFun "y" (TmVar "y"))
+toLC (ST.TmApp s t)   = TmApp s' t'
+                        where s' = toLC s
+                              t' = toLC t
