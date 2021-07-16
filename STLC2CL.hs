@@ -55,18 +55,38 @@ toLC (ST.TmApp s t)   = TmApp s' t'
 
 {- ===================== Stage 2: Lambda elimination ======================== -}
 
--- Fresh variables in a term
-fvs :: Term -> Set Id
-fvs (TmVar x)       = insert x empty
-fvs (TmFun x tm)    = delete x $ fvs tm
-fvs (TmApp tm1 tm2) = union (fvs tm1) (fvs tm2)
+data Term' = S'
+           | K'
+           | TmVar' Id
+           | TmFun' Id Term'
+           | TmApp' Term' Term'
+           deriving Show
 
-toCL :: Term -> Maybe CL.Term
-toCL (TmFun x (TmVar y)) | x == y    = return $ CL.App (CL.App CL.S CL.K) CL.K
-                         | otherwise = Nothing
-toCL (TmFun x t)         | not $ member x (fvs t) = do t' <- toCL t
-                                                       return $ CL.App CL.K t'
-                         | otherwise              = Nothing
-toCL (TmApp s t)         = do s' <- toCL s
-                              t' <- toCL t
-                              return $ CL.App (CL.App CL.S s') t'
+-- Translate lambda terms into a mixed representation of lambda / CL terms
+-- Makes it simpler to implement the term rewriting algorithm for translating
+-- lambda to CL terms.
+toTerm' :: Term -> Term'
+toTerm' (TmVar x) = TmVar' x
+toTerm' (TmFun x t) = TmFun' x (toTerm' t)
+toTerm' (TmApp s t) = TmApp' (toTerm' s) (toTerm' t)
+
+-- Fresh variables in a term
+fvs :: Term' -> Set Id
+fvs (S')             = empty
+fvs (K')             = empty
+fvs (TmVar' x)       = insert x empty
+fvs (TmFun' x tm)    = delete x $ fvs tm
+fvs (TmApp' tm1 tm2) = union (fvs tm1) (fvs tm2)
+
+toCL' :: Term' -> Term'
+toCL' (S') = S'
+toCL' (K') = K'
+toCL' (TmVar' x) = TmVar' x
+toCL' (TmApp' s t) = TmApp' s' t'
+                   where s' = toCL' s
+                         t' = toCL' t
+toCL' (TmFun' x (TmVar' y)) | x == y = TmApp' (TmApp' S' K') K'
+toCL' (TmFun' x t) | not $ member x (fvs t) = TmApp' K' (toCL' t)
+                   | otherwise = case t of
+                                   t'@(TmFun' _ _) -> toCL' (TmFun' x (toCL' t'))
+                                   (TmApp' s' t')   -> TmApp' (TmApp' S' (toCL' s')) (toCL' t')
