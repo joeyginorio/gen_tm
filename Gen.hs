@@ -16,26 +16,40 @@ import Data.Monoid (Sum(..))
 
 {- ============================ Term Generator ============================== -}
 
--- Search + Maybe monad
--- Our type-directed search might not always return something
-type SearchM c = SearchT c Maybe
+-- Search monad lets us perform a weighted breadth first search
+genTerm :: Context -> Type -> Search (Sum Integer) Term
+genTerm ctx ty = genUnit ctx ty
+             <|> genBool ctx ty
+             <|> genVar ctx ty
+             <|> genProd ctx ty
 
 -- Generate unit
-genUnit :: Context -> Type -> SearchM (Sum Integer) Term
+genUnit :: Context -> Type -> Search (Sum Integer) Term
 genUnit _ (TyUnit) = do cost' (Sum 1)
                         return TmUnit
-genUnit _ _        = lift Nothing
+genUnit _ _        = abandon
 
 -- Generate booleans
-genBool :: Context -> Type -> SearchM (Sum Integer) Term
+genBool :: Context -> Type -> Search (Sum Integer) Term
 genBool _ (TyBool) = do cost' (Sum 1)
                         return TmTrue
                  <|> do cost' (Sum 1)
                         return TmFalse
-genBool _ _        = lift Nothing
+genBool _ _        = abandon
 
 -- Generate variables
+genVar :: Context -> Type -> Search (Sum Integer) Term
+genVar []           ty' = abandon
+genVar ((x,ty):ctx) ty' | ty == ty' = do cost' (Sum 1)
+                                         return (TmVar x)
+                        | otherwise = genVar ctx ty'
 
+genProd :: Context -> Type -> Search (Sum Integer) Term
+genProd ctx (TyProd ty1 ty2) = do cost' (Sum 1)
+                                  TmProd
+                                    <$> genTerm ctx ty1
+                                    <*> genTerm ctx ty2
+genProd _ _                  = abandon
 
 -- genVar :: Context -> Type -> Search (Sum Integer) Term
 -- genVar ((x,ty):ctx) = do cost' (Sum 1)
