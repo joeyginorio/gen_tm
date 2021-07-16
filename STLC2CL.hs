@@ -78,6 +78,10 @@ fvs (TmVar' x)       = insert x empty
 fvs (TmFun' x tm)    = delete x $ fvs tm
 fvs (TmApp' tm1 tm2) = union (fvs tm1) (fvs tm2)
 
+-- Convert lambda' terms to cl' terms
+-- NOTE: Term' is a representation of BOTH lambda and cl terms because the
+--       translation algorithm introduces pseudo-lambda and pseudo-cl terms
+--       at intermediate stages. e.g. TmFun "x" K is neither a lambda or cl term.
 toCL' :: Term' -> Term'
 toCL' (S') = S'
 toCL' (K') = K'
@@ -89,4 +93,7 @@ toCL' (TmFun' x (TmVar' y)) | x == y = TmApp' (TmApp' S' K') K'
 toCL' (TmFun' x t) | not $ member x (fvs t) = TmApp' K' (toCL' t)
                    | otherwise = case t of
                                    t'@(TmFun' _ _) -> toCL' (TmFun' x (toCL' t'))
-                                   (TmApp' s' t')   -> TmApp' (TmApp' S' (toCL' s')) (toCL' t')
+                                   (TmApp' s' t')   -> TmApp'
+                                                       (TmApp' S' s'') t''
+                                     where s'' = toCL' $ TmFun' x s'
+                                           t'' = toCL' $ TmFun' x t'
