@@ -83,17 +83,37 @@ fvs (TmApp' tm1 tm2) = union (fvs tm1) (fvs tm2)
 --       translation algorithm introduces pseudo-lambda and pseudo-cl terms
 --       at intermediate stages. e.g. TmFun "x" K is neither a lambda or cl term.
 toCL' :: Term' -> Term'
-toCL' (S') = S'
-toCL' (K') = K'
-toCL' (TmVar' x) = TmVar' x
-toCL' (TmApp' s t) = TmApp' s' t'
-                   where s' = toCL' s
-                         t' = toCL' t
+toCL' (S')                  = S'
+toCL' (K')                  = K'
+toCL' (TmVar' x)            = TmVar' x
+toCL' (TmApp' s t)          = TmApp' s' t'
+                              where s' = toCL' s
+                                    t' = toCL' t
 toCL' (TmFun' x (TmVar' y)) | x == y = TmApp' (TmApp' S' K') K'
-toCL' (TmFun' x t) | not $ member x (fvs t) = TmApp' K' (toCL' t)
-                   | otherwise = case t of
-                                   t'@(TmFun' _ _) -> toCL' (TmFun' x (toCL' t'))
-                                   (TmApp' s' t')   -> TmApp'
-                                                       (TmApp' S' s'') t''
-                                     where s'' = toCL' $ TmFun' x s'
-                                           t'' = toCL' $ TmFun' x t'
+toCL' (TmFun' x t)          | not $ member x (fvs t) = TmApp' K' (toCL' t)
+                            | otherwise = case t of
+                                t'@(TmFun' _ _) -> toCL' (TmFun' x (toCL' t'))
+                                (TmApp' s' t')  -> TmApp'
+                                                   (TmApp' S' s'') t''
+                                  where s'' = toCL' $ TmFun' x s'
+                                        t'' = toCL' $ TmFun' x t'
+
+-- Transforms pseudo CL terms to legit CL terms (maybe!)
+-- If for some reason the translation algorithm fails to convert things
+-- to CL, then the Maybe monad will catch it (by returning Nothing).
+toCL :: Term' -> Maybe CL.Term
+toCL (S')         = return CL.S
+toCL (K')         = return CL.K
+toCL (TmApp' s t) = do s' <- toCL s
+                       t' <- toCL t
+                       return $ CL.App s' t'
+toCL _            = Nothing
+
+-- Compile STLC to CL
+-- 4 stages:
+-- (i) toLC, takes STLC terms to lambda calculus
+-- (ii) toTerm', takes lambda terms to pseudo-lambda terms
+-- (iii) toCL', takes pseudo lambda terms to pseudo cl terms
+-- (iv) toCL, takes pseudo cl terms to cl terms (maybe!)
+compile :: ST.Term -> Maybe CL.Term
+compile = toCL . toCL' . toTerm' . toLC
