@@ -50,15 +50,3 @@ genProd ctx (TyProd ty1 ty2) = do cost' (Sum 1)
                                     <$> genTerm ctx ty1
                                     <*> genTerm ctx ty2
 genProd _ _                  = abandon
-
--- genVar :: Context -> Type -> Search (Sum Integer) Term
--- genVar ((x,ty):ctx) = do cost' (Sum 1)
-                         -- return $ TmVar x
-
--- data BTree = Nil | Node BTree Bool BTree deriving Show
-
--- btrees :: Search (Sum Integer) BTree
--- btrees = do cost' (Sum 0)
---             return Nil
---      <|> do cost' (Sum 1)
---             Node <$> btrees <*> (pure True) <*> btrees
