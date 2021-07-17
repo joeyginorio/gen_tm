@@ -115,5 +115,14 @@ toCL _            = Nothing
 -- (ii) toTerm', takes lambda terms to pseudo-lambda terms
 -- (iii) toCL', takes pseudo lambda terms to pseudo cl terms
 -- (iv) toCL, takes pseudo cl terms to cl terms (maybe!)
+--
+-- >>> compile $ ST.TmUnit
+-- Just (App (App S K) K)
+--
+-- >>> compile $ ST.TmFun "x" ST.TyBool ST.TmUnit
+-- Just (App K (App (App S K) K))
+--
+-- >>> compile $ ST.TmProd ST.TmTrue ST.TmUnit
+-- Just (App (App S (App (App S (App (App S K) K)) (App K (App (App S (App K K)) (App (App S K) K))))) (App K (App (App S K) K)))
 compile :: ST.Term -> Maybe CL.Term
 compile = toCL . toCL' . toTerm' . toLC
