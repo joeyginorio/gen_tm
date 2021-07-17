@@ -1,8 +1,9 @@
 let
 
-  project = import ./default.nix;
+  project = import ./nix/default.nix {};
 
 in
+
   project.shellFor {
     packages = ps: with ps; [];
 

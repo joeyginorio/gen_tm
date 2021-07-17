@@ -9,8 +9,8 @@
 module Language.STLC2CL where
 
 import Data.Set (Set, empty, delete, insert, union, member)
-import qualified STLC as ST
-import qualified CL as CL
+import qualified Language.STLC as ST
+import qualified Language.CL as CL
 
 
 {- ====================== Stage 1: Erasure + Desugar ======================== -}

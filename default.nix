@@ -1,20 +1,7 @@
 let
 
-  sources = import ./nix/sources.nix {};
+  project = import ./nix/default.nix {};
 
-  haskellNix = import sources.haskellNix {};
+in
 
-  pkgs = import
-    haskellNix.sources.nixpkgs-unstable
-    haskellNix.nixpkgsArgs;
-
-in pkgs.haskell-nix.project {
-
-  src = pkgs.haskell-nix.haskellLib.cleanGit {
-    name = "gen-tm";
-    src = ./.;
-  };
-
-  compiler-nix-name = "ghc8105";
-
-}
+  project.gen-tm.compontents.library
