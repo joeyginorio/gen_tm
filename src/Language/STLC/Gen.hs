@@ -12,13 +12,18 @@ import Language.STLC
 
 import Control.Applicative
 import Control.Monad.Search
-import Control.Monad.Trans
 import Data.Monoid (Sum(..))
 
 
 {- ============================ Term Generator ============================== -}
 
 -- Search monad lets us perform a weighted breadth first search
+--
+-- >>> runSearch $ genTerm [] TyUnit
+-- [(Sum {getSum = 1},TmUnit)]
+--
+-- >>> runSearch $ genTerm [("x", TyBool)] (TyProd TyBool TyUnit)
+-- [(Sum {getSum = 3},TmProd (TmVar "x") TmUnit),(Sum {getSum = 3},TmProd TmTrue TmUnit),(Sum {getSum = 3},TmProd TmFalse TmUnit)]
 genTerm :: Context -> Type -> Search (Sum Integer) Term
 genTerm ctx ty = genUnit ctx ty
              <|> genBool ctx ty
