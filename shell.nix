@@ -5,8 +5,6 @@ let
 in
 
   project.shellFor {
-    packages = ps: with ps; [];
-
     withHoogle = true;
 
     tools = {
