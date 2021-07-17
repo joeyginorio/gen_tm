@@ -4,4 +4,4 @@ let
 
 in
 
-  project.gen-tm.compontents.library
+  project.gen-tm.components.library
