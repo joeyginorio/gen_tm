@@ -11,7 +11,7 @@ haskell-nix.project {
 
   src = haskell-nix.haskellLib.cleanGit {
     name = "gen-tm";
-    src = ./.;
+    src = ../.;
   };
 
   compiler-nix-name = "ghc8105";
