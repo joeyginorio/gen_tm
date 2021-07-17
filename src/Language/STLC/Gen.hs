@@ -6,7 +6,9 @@
      (i) Type generation
      (ii) Type-directed term generation -}
 
-import STLC
+module Language.STLC.Gen where
+
+import Language.STLC
 
 import Control.Applicative
 import Control.Monad.Search

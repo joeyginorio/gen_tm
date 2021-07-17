@@ -22,10 +22,12 @@ extra-source-files: CHANGELOG.md
 
 library
     exposed-modules:  Language.STLC
+                    , Language.STLC.Gen
                     , Language.CL
                     , Language.STLC2CL
     build-depends:    base
                     , containers
+                    , monad-dijkstra
                     , mtl
                     , transformers
     hs-source-dirs:   src
