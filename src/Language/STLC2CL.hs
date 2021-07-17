@@ -6,7 +6,7 @@
          untyped lambda calculus.
      (ii) Standard translation from untyped lambda calculus to CL. -}
 
-module STLC2CL where
+module Language.STLC2CL where
 
 import Data.Set (Set, empty, delete, insert, union, member)
 import qualified STLC as ST
