@@ -27,29 +27,27 @@ import Data.Monoid (Sum(..))
 --       the enumeration in order of increasing cost.
 type SearchS c = SearchT c (State [Id])
 
-
+-- Generate terms
+-----------------
 -- >>> take 3 . flip evalState ids . runSearchT $ genTm [] TyUnit
 -- [(Sum {getSum = 1},TmUnit),(Sum {getSum = 5},TmSnd (TmProd TmUnit TmUnit)), ...]
---
--- >>> take 3 . flip evalState ids . runSearchT $ genTm [("x", TyBool)] (TyProd TyBool TyUnit)
--- [(Sum {getSum = 3},TmProd (TmVar "x") TmUnit),(Sum {getSum = 3}, ...]
 genTm :: Context -> Type -> SearchS (Sum Integer) Term
 genTm ctx ty = genTmUnit ctx ty
-             <|> genTmBool ctx ty
-             <|> genTmVar  ctx ty
-             <|> genTmProd ctx ty
-             <|> genTmFun  ctx ty
-             <|> genTmFst  ctx ty
-             <|> genTmSnd  ctx ty
-             <|> genTmApp  ctx ty
+           <|> genTmBool ctx ty
+           <|> genTmVar  ctx ty
+           <|> genTmProd ctx ty
+           <|> genTmFun  ctx ty
+           <|> genTmFst  ctx ty
+           <|> genTmSnd  ctx ty
+           <|> genTmApp  ctx ty
 
--- Generate unit
+-- Generate unit terms
 genTmUnit :: Context -> Type -> SearchS (Sum Integer) Term
 genTmUnit _ (TyUnit) = do cost' (Sum 1)
                           return TmUnit
 genTmUnit _ _        = abandon
 
--- Generate booleans
+-- Generate boolean terms
 genTmBool :: Context -> Type -> SearchS (Sum Integer) Term
 genTmBool _ (TyBool) = do cost' (Sum 1)
                           return TmTrue
@@ -57,13 +55,14 @@ genTmBool _ (TyBool) = do cost' (Sum 1)
                         return TmFalse
 genTmBool _ _        = abandon
 
--- Generate variables
+-- Generate variable terms
 genTmVar :: Context -> Type -> SearchS (Sum Integer) Term
 genTmVar []           ty' = abandon
 genTmVar ((x,ty):ctx) ty' | ty == ty' = do cost' (Sum 1)
                                            return (TmVar x)
                           | otherwise = genTmVar ctx ty'
 
+-- Generate product terms
 genTmProd :: Context -> Type -> SearchS (Sum Integer) Term
 genTmProd ctx (TyProd ty1 ty2) = do cost' (Sum 1)
                                     TmProd
@@ -72,7 +71,7 @@ genTmProd ctx (TyProd ty1 ty2) = do cost' (Sum 1)
 genTmProd _ _                  = abandon
 
 
--- Generate functions
+-- Generate function terms
 genTmFun :: Context -> Type -> SearchS (Sum Integer) Term
 genTmFun ctx (TyFun ty1 ty2) = do cost' (Sum 1)
                                   cost' (Sum (sizeTy ty1))
@@ -90,7 +89,7 @@ sizeTy (TyBool)         = 1
 sizeTy (TyProd ty1 ty2) = 1 + (sizeTy ty1) + (sizeTy ty2)
 sizeTy (TyFun ty1 ty2)  = 1 + (sizeTy ty1) + (sizeTy ty2)
 
-
+-- Generate if-then-else terms
 genTmIf :: Context -> Type -> SearchS (Sum Integer) Term
 genTmIf ctx ty = do cost' (Sum 1)
                     TmIf
@@ -98,18 +97,21 @@ genTmIf ctx ty = do cost' (Sum 1)
                       <*> genTm ctx ty
                       <*> genTm ctx ty
 
+-- Generate fst terms
 genTmFst :: Context -> Type -> SearchS (Sum Integer) Term
 genTmFst ctx ty = do cost' (Sum 1)
                      ty2 <- genTy
                      TmFst
                        <$> genTm ctx (TyProd ty ty2)
 
+-- Generate snd terms
 genTmSnd :: Context -> Type -> SearchS (Sum Integer) Term
 genTmSnd ctx ty = do cost' (Sum 1)
                      ty1 <- genTy
                      TmSnd
                        <$> genTm ctx (TyProd ty1 ty)
 
+-- Generate app terms
 genTmApp :: Context -> Type -> SearchS (Sum Integer) Term
 genTmApp ctx ty = do cost' (Sum 1)
                      ty1 <- genTy
@@ -121,32 +123,33 @@ genTmApp ctx ty = do cost' (Sum 1)
 {- ============================ Type Generator ============================== -}
 
 -- Generate types
---
+-----------------
 -- >>> take 3 . flip evalState ids . runSearchT $ genTy
--- [(Sum {getSum = 1},TyUnit),(Sum {getSum = 1},TyBool),(Sum {getSum = 3},TyProd TyUnit TyUnit)]
+-- [(Sum {getSum = 1},TyUnit),(Sum {getSum = 1},TyBool), ...]
 genTy :: SearchS (Sum Integer) Type
 genTy = genTyUnit
     <|> genTyBool
     <|> genTyProd
+    <|> genTyFun
 
--- Generate unit
+-- Generate unit type
 genTyUnit :: SearchS (Sum Integer) Type
 genTyUnit = do cost' (Sum 1)
                return TyUnit
 
--- Generate booleans
+-- Generate bool type
 genTyBool :: SearchS (Sum Integer) Type
 genTyBool = do cost' (Sum 1)
                return TyBool
 
--- Generate product
+-- Generate product type
 genTyProd :: SearchS (Sum Integer) Type
 genTyProd = do cost' (Sum 1)
                TyProd
                  <$> genTy
                  <*> genTy
 
--- Generate product
+-- Generate function type
 genTyFun :: SearchS (Sum Integer) Type
 genTyFun = do cost' (Sum 1)
               TyFun
