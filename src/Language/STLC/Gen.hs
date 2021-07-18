@@ -28,11 +28,11 @@ import Data.Monoid (Sum(..))
 type SearchS c = SearchT c (State [Id])
 
 
--- >>> flip evalState [] . runSearchT $ genTm [] TyUnit
--- Prelude.head: empty list
+-- >>> take 3 . flip evalState ids . runSearchT $ genTm [] TyUnit
+-- [(Sum {getSum = 1},TmUnit),(Sum {getSum = 5},TmSnd (TmProd TmUnit TmUnit)),(Sum {getSum = 5},TmFst (TmProd TmUnit TmUnit))]
 --
--- >>> flip evalState [] . runSearchT $ genTm [("x", TyBool)] (TyProd TyBool TyUnit)
--- Prelude.tail: empty list
+-- >>> take 3 . flip evalState ids . runSearchT $ genTm [("x", TyBool)] (TyProd TyBool TyUnit)
+-- [(Sum {getSum = 3},TmProd (TmVar "x") TmUnit),(Sum {getSum = 3},TmProd TmTrue TmUnit),(Sum {getSum = 3},TmProd TmFalse TmUnit)]
 genTm :: Context -> Type -> SearchS (Sum Integer) Term
 genTm ctx ty = genTmUnit ctx ty
              <|> genTmBool ctx ty
@@ -122,8 +122,8 @@ genTmApp ctx ty = do cost' (Sum 1)
 
 -- Generate types
 --
--- >>> flip evalState [] . runSearchT $ genTy
--- ProgressCancelledException
+-- >>> take 3 . flip evalState ids . runSearchT $ genTy
+-- [(Sum {getSum = 1},TyUnit),(Sum {getSum = 1},TyBool),(Sum {getSum = 3},TyProd TyUnit TyUnit)]
 genTy :: SearchS (Sum Integer) Type
 genTy = genTyUnit
     <|> genTyBool
