@@ -3,8 +3,9 @@
    Term generator for simply typed lambda calculus. With STLC2CL we can
    also use the generator for combinatory logic. -}
 
-import STLC
+module Language.STLC.Gen where
 
+import Language.STLC
 import Control.Applicative
 import Control.Monad.Search
 import Control.Monad.Trans
@@ -26,6 +27,12 @@ import Data.Monoid (Sum(..))
 --       the enumeration in order of increasing cost.
 type SearchS c = SearchT c (State [Id])
 
+
+-- >>> flip evalState [] . runSearchT $ genTm [] TyUnit
+-- Prelude.head: empty list
+--
+-- >>> flip evalState [] . runSearchT $ genTm [("x", TyBool)] (TyProd TyBool TyUnit)
+-- Prelude.tail: empty list
 genTm :: Context -> Type -> SearchS (Sum Integer) Term
 genTm ctx ty = genTmUnit ctx ty
              <|> genTmBool ctx ty
@@ -114,6 +121,9 @@ genTmApp ctx ty = do cost' (Sum 1)
 {- ============================ Type Generator ============================== -}
 
 -- Generate types
+--
+-- >>> flip evalState [] . runSearchT $ genTy
+-- ProgressCancelledException
 genTy :: SearchS (Sum Integer) Type
 genTy = genTyUnit
     <|> genTyBool
