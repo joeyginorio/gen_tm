@@ -51,8 +51,8 @@ genTmUnit _ _        = abandon
 genTmBool :: Context -> Type -> SearchS (Sum Integer) Term
 genTmBool _ (TyBool) = do cost' (Sum 1)
                           return TmTrue
-                 <|> do cost' (Sum 1)
-                        return TmFalse
+                   <|> do cost' (Sum 1)
+                          return TmFalse
 genTmBool _ _        = abandon
 
 -- Generate variable terms
