@@ -23,6 +23,7 @@ extra-source-files: CHANGELOG.md
 library
     exposed-modules:  Language.STLC
                     , Language.STLC.Gen
+                    , Language.STLC.Dataset
                     , Language.CL
                     , Language.STLC2CL
     build-depends:    aeson >= 1.5.6.0
