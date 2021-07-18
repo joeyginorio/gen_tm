@@ -25,7 +25,8 @@ library
                     , Language.STLC.Gen
                     , Language.CL
                     , Language.STLC2CL
-    build-depends:    base
+    build-depends:    aeson >= 1.5.6.0
+                    , base
                     , containers
                     , monad-dijkstra
                     , mtl
