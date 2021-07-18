@@ -8,7 +8,6 @@ import STLC
 import Control.Applicative
 import Control.Monad.Search
 import Control.Monad.Trans
-import Control.Monad.Trans.Reader
 import Control.Monad.Trans.State
 import Data.Monoid (Sum(..))
 
@@ -19,11 +18,12 @@ import Data.Monoid (Sum(..))
 -- Search monad handles weighted nondeterminism
 -- State monad handles reading/writing of fresh variable names
 -- NOTE: Without search monad, a naive approach to generation would never
---       terminate. For a simple program like f :: Unit -> Unit there are
---       countably infinite inhabitants. So what we want is to enumerate
---       inhabitants by increasing size! The search monad lets us add costs
---       to the generative process. We provide the cost annotations and it
---       handles the enumeration in order of increasing cost.
+--       terminate. For a simple program like t :: Unit, the lhs of an
+--       application will get stuck in a depth-first traversal of an
+--       infinitely large term. So what we want is to explore terms by
+--       increasing size. The search monad lets us add costs to the
+--       generative process. We provide the cost annotations and it handles
+--       the enumeration in order of increasing cost.
 type SearchS c = SearchT c (State [Id])
 
 genTm :: Context -> Type -> SearchS (Sum Integer) Term
