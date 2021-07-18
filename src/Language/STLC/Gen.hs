@@ -29,10 +29,10 @@ type SearchS c = SearchT c (State [Id])
 
 
 -- >>> take 3 . flip evalState ids . runSearchT $ genTm [] TyUnit
--- [(Sum {getSum = 1},TmUnit),(Sum {getSum = 5},TmSnd (TmProd TmUnit TmUnit)),(Sum {getSum = 5},TmFst (TmProd TmUnit TmUnit))]
+-- [(Sum {getSum = 1},TmUnit),(Sum {getSum = 5},TmSnd (TmProd TmUnit TmUnit)), ...]
 --
 -- >>> take 3 . flip evalState ids . runSearchT $ genTm [("x", TyBool)] (TyProd TyBool TyUnit)
--- [(Sum {getSum = 3},TmProd (TmVar "x") TmUnit),(Sum {getSum = 3},TmProd TmTrue TmUnit),(Sum {getSum = 3},TmProd TmFalse TmUnit)]
+-- [(Sum {getSum = 3},TmProd (TmVar "x") TmUnit),(Sum {getSum = 3}, ...]
 genTm :: Context -> Type -> SearchS (Sum Integer) Term
 genTm ctx ty = genTmUnit ctx ty
              <|> genTmBool ctx ty
