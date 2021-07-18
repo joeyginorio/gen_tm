@@ -13,6 +13,17 @@ import Control.Monad.Trans.State
 import Data.Monoid (Sum(..))
 
 
+-- Generates all closed terms in STLC
+gen :: SearchS (Sum Integer) Term
+gen = do ty <- genTy
+         tm <- genTm [] ty
+         return tm
+
+-- Helper function to easily run monad stack
+evalSearchS :: SearchS (Sum Integer) a -> [a]
+evalSearchS = map snd . flip evalState ids . runSearchT
+
+
 {- ============================ Term Generator ============================== -}
 
 -- Search + State monad stack.
