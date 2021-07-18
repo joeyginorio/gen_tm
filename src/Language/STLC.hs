@@ -2,10 +2,9 @@
    =======
    Defines syntax and semantics of STLC. -}
 
-module STLC where
+module Language.STLC where
 
 import Data.Set (Set, empty, delete, insert, union, member)
-import Control.Monad
 import Control.Monad.Trans
 import Control.Monad.Trans.Reader
 

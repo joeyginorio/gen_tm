@@ -3,7 +3,7 @@
    Defines syntax and semantics of SK-combinatory logic as both strings
    and graphs. -}
 
-module CL where
+module Language.CL where
 
 {- ================================= Syntax ================================= -}
 

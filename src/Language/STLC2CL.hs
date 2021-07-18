@@ -6,11 +6,11 @@
          untyped lambda calculus.
      (ii) Standard translation from untyped lambda calculus to CL. -}
 
-module STLC2CL where
+module Language.STLC2CL where
 
 import Data.Set (Set, empty, delete, insert, union, member)
-import qualified STLC as ST
-import qualified CL as CL
+import qualified Language.STLC as ST
+import qualified Language.CL as CL
 
 
 {- ====================== Stage 1: Erasure + Desugar ======================== -}
@@ -115,5 +115,14 @@ toCL _            = Nothing
 -- (ii) toTerm', takes lambda terms to pseudo-lambda terms
 -- (iii) toCL', takes pseudo lambda terms to pseudo cl terms
 -- (iv) toCL, takes pseudo cl terms to cl terms (maybe!)
+--
+-- >>> compile $ ST.TmUnit
+-- Just (App (App S K) K)
+--
+-- >>> compile $ ST.TmFun "x" ST.TyBool ST.TmUnit
+-- Just (App K (App (App S K) K))
+--
+-- >>> compile $ ST.TmProd ST.TmTrue ST.TmUnit
+-- Just (App (App S (App (App S (App (App S K) K)) (App K (App (App S (App K K)) (App (App S K) K))))) (App K (App (App S K) K)))
 compile :: ST.Term -> Maybe CL.Term
 compile = toCL . toCL' . toTerm' . toLC

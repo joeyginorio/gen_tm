@@ -1,0 +1,35 @@
+cabal-version:      2.4
+name:               gen-tm
+version:            0.1.0.0
+
+-- A short (one-line) description of the package.
+-- synopsis:
+
+-- A longer description of the package.
+-- description:
+
+-- A URL where users can report bugs.
+-- bug-reports:
+
+license:            MIT
+author:             Joey Velez-Ginorio
+-- maintainer:
+
+-- A copyright notice.
+-- copyright:
+-- category:
+extra-source-files: CHANGELOG.md
+
+library
+    exposed-modules:  Language.STLC
+                    , Language.STLC.Gen
+                    , Language.CL
+                    , Language.STLC2CL
+    build-depends:    base
+                    , containers
+                    , monad-dijkstra
+                    , mtl
+                    , transformers
+    hs-source-dirs:   src
+    default-language: Haskell2010
+    ghc-options:      -Wall 
