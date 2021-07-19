@@ -172,7 +172,7 @@ prop_welltypedNormalForm =
   property $ do
     ty <- forAll genTy
     tm <- forAll (genWellTypedExp ty)
-    tm' <- pure $ flip runReader ids $ eval tm
+    let tm' = flip runReader ids $ eval tm
     let (Right ty') = runReaderT (tyCheck tm') []
     ty === ty'
 
