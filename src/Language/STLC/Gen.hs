@@ -20,6 +20,8 @@ gen = do ty <- genTy
          return tm
 
 -- Helper function to easily run monad stack
+-- NOTE: Returns an infinite list. Use 'take' to force finite amount
+--       of computation.
 evalSearchS :: SearchS (Sum Integer) a -> [a]
 evalSearchS = map snd . flip evalState ids . runSearchT
 
