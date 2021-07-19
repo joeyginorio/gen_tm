@@ -44,9 +44,10 @@ data Error = EVar  Id         -- Variable not in context
            | EFun2 Term       -- First term isn't a funtion
            deriving (Show)
 
--- | Typecheck type = Reader + Either monad stack.
--- (i) Reader passes around the context.
--- (ii) Either passes around informative typecheck errors.
+-- | Typecheck type = 'Reader' + 'Either' monad stack.
+--
+--   (1) 'Reader' passes around the context.
+--   (2) 'Either' passes around informative typecheck errors.
 type TcType = ReaderT Context (Either Error) Type
 
 -- | Typecheck terms
@@ -103,6 +104,9 @@ find x = do ctx <- ask
 type Id = String
 
 -- | Infinite list of fresh variable names
+--
+-- >>> take 10 ids
+-- ["#0","#1","#2","#3","#4","#5","#6","#7","#8","#9"]
 ids :: [Id]
 ids = zipWith (:) cs nums
       where cs   = repeat '#'
@@ -122,6 +126,7 @@ fvs (TmSnd tm)         = fvs tm
 fvs (TmApp tm1 tm2)    = union (fvs tm1) (fvs tm2)
 
 -- | alpha conversion of terms (renaming of variables).
+--
 -- @aconv x y tm@ means change all @x@ to @y@ in @tm@
 aconv :: Id -> Id -> Term -> Term
 aconv x y (TmUnit)         = TmUnit
@@ -137,11 +142,13 @@ aconv x y (TmSnd tm)       = TmSnd (aconv x y tm)
 aconv x y (TmApp tm1 tm2)  = TmApp (aconv x y tm1) (aconv x y tm2)
 
 -- | Substituted term.
--- Reader monad carries around fresh identifiers
+--
+-- 'Reader' monad carries around fresh identifiers
 type STerm = Reader [Id] Term
 
 -- | Capture-avoiding substitution.
--- @s[x/t]@ means a term s where all @x@ are replaced with @t@
+--
+-- @s[x/t]@ means a term @s@ where all @x@ are replaced with @t@
 subst :: Id -> Term -> Term -> STerm
 subst x t (TmUnit)           = return TmUnit
 subst x t (TmTrue)           = return TmTrue

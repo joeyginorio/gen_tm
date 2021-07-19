@@ -39,10 +39,11 @@ library
                   , containers
                   , monad-dijkstra
                   , mtl
+                  , text >= 1.2.4.1
                   , transformers
   hs-source-dirs:   src
   default-language: Haskell2010
-  ghc-options:      -Wall 
+  ghc-options:      -Wall
 
 executable gen-tm
   main-is:          Main.hs

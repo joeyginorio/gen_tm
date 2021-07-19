@@ -79,7 +79,8 @@ fvs (TmFun' x tm)    = delete x $ fvs tm
 fvs (TmApp' tm1 tm2) = union (fvs tm1) (fvs tm2)
 
 -- | Convert lambda' terms to cl' terms.
--- NOTE: Term' is a representation of BOTH lambda and cl terms because the
+--
+-- NOTE: @Term'@ is a representation of BOTH lambda and cl terms because the
 --       translation algorithm introduces pseudo-lambda and pseudo-cl terms
 --       at intermediate stages. e.g. @TmFun "x" K@ is neither a lambda or cl term.
 toCL' :: Term' -> Term'
@@ -109,13 +110,12 @@ toCL (TmApp' s t) = do s' <- toCL s
                        return $ CL.App s' t'
 toCL _            = Nothing
 
--- | Compile STLC to CL
+-- | Compile STLC to CL in 4 stages:
 --
--- 4 stages:
--- (i) toLC, takes STLC terms to lambda calculus
--- (ii) toTerm', takes lambda terms to pseudo-lambda terms
--- (iii) toCL', takes pseudo lambda terms to pseudo cl terms
--- (iv) toCL, takes pseudo cl terms to cl terms (maybe!)
+--   (1) @toLC@, takes STLC terms to lambda calculus
+--   (2) @toTerm'@, takes lambda terms to pseudo-lambda terms
+--   (3) @toCL'@, takes pseudo lambda terms to pseudo cl terms
+--   (4) @toCL@, takes pseudo cl terms to cl terms (maybe!)
 --
 -- >>> compile $ ST.TmUnit
 -- Just (App (App S K) K)

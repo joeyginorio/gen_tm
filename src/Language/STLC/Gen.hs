@@ -19,21 +19,26 @@ gen = do ty <- genTy
          tm <- genTm [] ty
          return tm
 
--- | Helper function to easily run monad stack
+-- | Helper function to easily run monad stack.
+--
+-- NOTE: Returns an infinite list. Use 'take' to force finite amount
+--       of computation.
 evalSearchS :: SearchS (Sum Integer) a -> [a]
 evalSearchS = map snd . flip evalState ids . runSearchT
 
 
 {- ============================ Term Generator ============================== -}
 
--- | Search + State monad stack.
--- Search monad handles weighted nondeterminism
--- State monad handles reading/writing of fresh variable names
--- NOTE: Without search monad, a naive approach to generation would never
---       terminate. For a simple program like t :: Unit, the lhs of an
+-- | 'Search' + 'State' monad stack.
+--
+-- 'Search' monad handles weighted nondeterminism.
+-- 'State' monad handles reading/writing of fresh variable names.
+--
+-- NOTE: Without 'Search' monad, a naive approach to generation would never
+--       terminate. For a simple program like @t :: Unit@, the lhs of an
 --       application will get stuck in a depth-first traversal of an
 --       infinitely large term. So what we want is to explore terms by
---       increasing size. The search monad lets us add costs to the
+--       increasing size. The 'Search' monad lets us add costs to the
 --       generative process. We provide the cost annotations and it handles
 --       the enumeration in order of increasing cost.
 type SearchS c = SearchT c (State [Id])
@@ -93,7 +98,8 @@ genTmFun ctx (TyFun ty1 ty2) = do cost' (Sum 1)
 genTmFun _ _                 = abandon
 
 -- | Helper function for generating functions.
--- NOTE: Size of terms includes size of type annotations when using `genFun`
+--
+-- NOTE: Size of terms includes size of type annotations when using 'genFun'
 sizeTy :: Type -> Integer
 sizeTy (TyUnit)         = 1
 sizeTy (TyBool)         = 1
@@ -108,21 +114,21 @@ genTmIf ctx ty = do cost' (Sum 1)
                       <*> genTm ctx ty
                       <*> genTm ctx ty
 
--- | Generate fst terms
+-- | Generate @TmFst@ terms
 genTmFst :: Context -> Type -> SearchS (Sum Integer) Term
 genTmFst ctx ty = do cost' (Sum 1)
                      ty2 <- genTy
                      TmFst
                        <$> genTm ctx (TyProd ty ty2)
 
--- | Generate snd terms
+-- | Generate @TmSnd@ terms
 genTmSnd :: Context -> Type -> SearchS (Sum Integer) Term
 genTmSnd ctx ty = do cost' (Sum 1)
                      ty1 <- genTy
                      TmSnd
                        <$> genTm ctx (TyProd ty1 ty)
 
--- | Generate app terms
+-- | Generate @TmApp@ terms
 genTmApp :: Context -> Type -> SearchS (Sum Integer) Term
 genTmApp ctx ty = do cost' (Sum 1)
                      ty1 <- genTy
