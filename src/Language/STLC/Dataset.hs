@@ -10,16 +10,9 @@
       input  := unnormalized term
       output := normalized   term -}
 
-
 module Language.STLC.Dataset where
 
-import Language.STLC
--- import Language.STLC.Gen
-
-import GHC.Generics
--- import Data.Text.Lazy (Text)
-import Data.Text.Lazy.IO as I
-import Data.Aeson.Text (encodeToLazyText)
+import Language.STLC.Gen
 import Data.Aeson
 
 deriving instance Generic Type
