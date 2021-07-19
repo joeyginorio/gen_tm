@@ -80,11 +80,11 @@ tyCheck (TmIf tm1 tm2 tm3) = do ty1 <- tyCheck tm1
                                 return ty3
 tyCheck (TmFst tm)         = do ty <- tyCheck tm
                                 lift $ case ty of
-                                         (TyProd ty' _) -> Right ty'
+                                         (TyProd ty1 _) -> Right ty1
                                          _              -> Left $ EProd tm
 tyCheck (TmSnd tm)         = do ty <- tyCheck tm
                                 lift $ case ty of
-                                         (TyProd _ ty') -> Right ty'
+                                         (TyProd _ ty2) -> Right ty2
                                          _              -> Left $ EProd tm
 tyCheck (TmApp tm1 tm2)    = do ty1 <- tyCheck tm1
                                 ty2 <- tyCheck tm2
