@@ -26,12 +26,13 @@ library
                     , Language.STLC.Dataset
                     , Language.CL
                     , Language.STLC2CL
-    build-depends:    aeson >= 1.5.6.0
-                    , base
+    build-depends:    base
                     , containers
                     , monad-dijkstra
                     , mtl
                     , transformers
+                    , aeson >= 1.5.6.0
+                    , text >= 1.2.4.1
     hs-source-dirs:   src
     default-language: Haskell2010
     ghc-options:      -Wall 
