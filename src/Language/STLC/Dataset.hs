@@ -44,8 +44,8 @@ buildDataset = zipWith IOPair
 
 -- | Generate two datasets, lhs of tuple is STLC, rhs of tuple is CL
 -- | NOTE: The input/output pairs are unnormalized/normalized terms
-genDataset :: Int -> (Dataset Term, Dataset (Maybe CL.Term))
-genDataset n = (buildDataset ins outs, buildDataset ins' outs')
+genDatasets :: Int -> (Dataset Term, Dataset (Maybe CL.Term))
+genDatasets n = (buildDataset ins outs, buildDataset ins' outs')
                 where ins   = take n $ evalSearchS gen
                       outs  = map evalR ins
                       ins'  = map compile ins
