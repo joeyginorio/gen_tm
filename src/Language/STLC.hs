@@ -44,12 +44,12 @@ data Error = EVar  Id         -- Variable not in context
            | EFun2 Term       -- First term isn't a funtion
            deriving (Show)
 
--- Typecheck type = Reader + Either monad stack
--- (i) Reader passes around the context
--- (ii) Either passes around informative typecheck errors
-
+-- | Typecheck type = Reader + Either monad stack.
+-- (i) Reader passes around the context.
+-- (ii) Either passes around informative typecheck errors.
 type TcType = ReaderT Context (Either Error) Type
 
+-- | Typecheck terms
 tyCheck :: Term -> TcType
 tyCheck (TmUnit)           = return TyUnit
 tyCheck (TmTrue)           = return TyBool
@@ -99,16 +99,16 @@ find x = do ctx <- ask
 
 --                                {Interpreter}
 
--- Identifiers are strings
+-- | Identifiers are strings
 type Id = String
 
--- Infinite list of fresh variable names
+-- | Infinite list of fresh variable names
 ids :: [Id]
 ids = zipWith (:) cs nums
       where cs   = repeat '#'
-            nums = map show [0..]
+            nums = map show [0 :: Integer ..]
 
--- Fresh variables in a term
+-- | Fresh variables in a term
 fvs :: Term -> Set Id
 fvs (TmUnit)           = empty
 fvs (TmTrue)           = empty
@@ -121,8 +121,8 @@ fvs (TmFst tm)         = fvs tm
 fvs (TmSnd tm)         = fvs tm
 fvs (TmApp tm1 tm2)    = union (fvs tm1) (fvs tm2)
 
--- alpha conversion of terms (renaming of variables)
--- aconv x y tm means change all x to y in tm
+-- | alpha conversion of terms (renaming of variables).
+-- @aconv x y tm@ means change all @x@ to @y@ in @tm@
 aconv :: Id -> Id -> Term -> Term
 aconv x y (TmUnit)         = TmUnit
 aconv x y (TmTrue)         = TmTrue
@@ -136,12 +136,12 @@ aconv x y (TmFst tm)       = TmFst (aconv x y tm)
 aconv x y (TmSnd tm)       = TmSnd (aconv x y tm)
 aconv x y (TmApp tm1 tm2)  = TmApp (aconv x y tm1) (aconv x y tm2)
 
--- Substituted term
+-- | Substituted term.
 -- Reader monad carries around fresh identifiers
 type STerm = Reader [Id] Term
 
--- Capture-avoiding substitution
--- s[x/t] means a term s where all x are replaced with t
+-- | Capture-avoiding substitution.
+-- @s[x/t]@ means a term s where all @x@ are replaced with @t@
 subst :: Id -> Term -> Term -> STerm
 subst x t (TmUnit)           = return TmUnit
 subst x t (TmTrue)           = return TmTrue
@@ -170,7 +170,7 @@ subst x t (TmApp tm1 tm2)    = do tm1' <- subst x t tm1
                                   tm2' <- subst x t tm2
                                   return $ TmApp tm1' tm2'
 
--- The actual interpreter, using call-by-name evaluation order
+-- | The actual interpreter, using call-by-name evaluation order
 eval :: Term -> STerm
 eval (TmIf TmTrue tm2 _)         = eval tm2
 eval (TmIf TmFalse _ tm3)        = eval tm3

@@ -1,2 +1,6 @@
 packages:
     gen-tm.cabal
+
+write-ghc-environment-files: always
+tests: true
+documentation: true

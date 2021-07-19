@@ -5,5 +5,7 @@
       input  := unnormalized term
       output := normalized   term -}
 
+module Language.STLC.Dataset where
+
 import Language.STLC.Gen
 import Data.Aeson
