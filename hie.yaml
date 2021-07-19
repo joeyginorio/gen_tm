@@ -1,0 +1,10 @@
+cradle:
+  cabal:
+    - path: "./src"
+      component: "lib:gen-tm"
+    - path: "./test"
+      component: "gen-tm:test:spec"
+    - path: "./doctests"
+      component: "gen-tm:test:doctests"
+    - path: "./exe"
+      component: "exe:gen-tm"

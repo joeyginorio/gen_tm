@@ -22,13 +22,13 @@ import qualified Language.CL as CL
 
 type Id = String
 
--- Syntax of lambda calculus
+-- | Syntax of lambda calculus
 data Term = TmVar Id
           | TmFun Id Term
           | TmApp Term Term
           deriving Show
 
--- STLC to LC (applying type erasure and desugaring)
+-- | STLC to LC (applying type erasure and desugaring)
 toLC :: ST.Term -> Term
 toLC (ST.TmUnit)      = TmFun "x" (TmVar "x")
 toLC (ST.TmTrue)      = TmFun "x" (TmFun "y" (TmVar "x"))
@@ -62,7 +62,7 @@ data Term' = S'
            | TmApp' Term' Term'
            deriving Show
 
--- Translate lambda terms into a mixed representation of lambda / CL terms
+-- | Translate lambda terms into a mixed representation of lambda / CL terms.
 -- Makes it simpler to implement the term rewriting algorithm for translating
 -- lambda to CL terms.
 toTerm' :: Term -> Term'
@@ -70,7 +70,7 @@ toTerm' (TmVar x) = TmVar' x
 toTerm' (TmFun x t) = TmFun' x (toTerm' t)
 toTerm' (TmApp s t) = TmApp' (toTerm' s) (toTerm' t)
 
--- Fresh variables in a term
+-- | Fresh variables in a term
 fvs :: Term' -> Set Id
 fvs (S')             = empty
 fvs (K')             = empty
@@ -78,10 +78,11 @@ fvs (TmVar' x)       = insert x empty
 fvs (TmFun' x tm)    = delete x $ fvs tm
 fvs (TmApp' tm1 tm2) = union (fvs tm1) (fvs tm2)
 
--- Convert lambda' terms to cl' terms
--- NOTE: Term' is a representation of BOTH lambda and cl terms because the
+-- | Convert lambda' terms to cl' terms.
+--
+-- NOTE: @Term'@ is a representation of BOTH lambda and cl terms because the
 --       translation algorithm introduces pseudo-lambda and pseudo-cl terms
---       at intermediate stages. e.g. TmFun "x" K is neither a lambda or cl term.
+--       at intermediate stages. e.g. @TmFun "x" K@ is neither a lambda or cl term.
 toCL' :: Term' -> Term'
 toCL' (S')                  = S'
 toCL' (K')                  = K'
@@ -98,7 +99,7 @@ toCL' (TmFun' x t)          | not $ member x (fvs t) = TmApp' K' (toCL' t)
                                   where s'' = toCL' $ TmFun' x s'
                                         t'' = toCL' $ TmFun' x t'
 
--- Transforms pseudo CL terms to legit CL terms (maybe!)
+-- | Transforms pseudo CL terms to legit CL terms (maybe!).
 -- If for some reason the translation algorithm fails to convert things
 -- to CL, then the Maybe monad will catch it (by returning Nothing).
 toCL :: Term' -> Maybe CL.Term
@@ -109,12 +110,12 @@ toCL (TmApp' s t) = do s' <- toCL s
                        return $ CL.App s' t'
 toCL _            = Nothing
 
--- Compile STLC to CL
--- 4 stages:
--- (i) toLC, takes STLC terms to lambda calculus
--- (ii) toTerm', takes lambda terms to pseudo-lambda terms
--- (iii) toCL', takes pseudo lambda terms to pseudo cl terms
--- (iv) toCL, takes pseudo cl terms to cl terms (maybe!)
+-- | Compile STLC to CL in 4 stages:
+--
+--   (1) @toLC@, takes STLC terms to lambda calculus
+--   (2) @toTerm'@, takes lambda terms to pseudo-lambda terms
+--   (3) @toCL'@, takes pseudo lambda terms to pseudo cl terms
+--   (4) @toCL@, takes pseudo cl terms to cl terms (maybe!)
 --
 -- >>> compile $ ST.TmUnit
 -- Just (App (App S K) K)
