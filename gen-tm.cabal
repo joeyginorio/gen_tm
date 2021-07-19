@@ -59,13 +59,18 @@ test-suite spec
   type:             exitcode-stdio-1.0
   hs-source-dirs:   test
   main-is:          Spec.hs
+  other-modules:    Language.STLCSpec
   build-depends:    base
+                  , containers
                   , gen-tm
                   , QuickCheck
                   , hedgehog
                   , hedgehog-quickcheck
                   , hspec
                   , hspec-hedgehog
+                  , mmorph
+                  , mtl
+                  , transformers
 
 test-suite doctests
   type:             exitcode-stdio-1.0

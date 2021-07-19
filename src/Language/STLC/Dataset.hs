@@ -14,6 +14,10 @@ module Language.STLC.Dataset where
 
 import Language.STLC.Gen
 import Data.Aeson
+import GHC.Generics (Generic)
+import Language.STLC (Type (..), Term (..))
+import qualified Data.Text.Lazy.IO as I
+import Data.Aeson.Text (encodeToLazyText)
 
 deriving instance Generic Type
 deriving instance ToJSON Type

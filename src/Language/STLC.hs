@@ -28,7 +28,7 @@ data Type = TyUnit                          -- ^ Unit
           | TyBool                          -- ^ Booleans
           | TyProd Type Type                -- ^ Products
           | TyFun  Type Type                -- ^ Functions
-          deriving (Show, Eq)
+          deriving (Show, Eq, Ord)
 
 -- | Binding,
 -- e.g., @x :: Bool => (x,Bool)@
@@ -80,21 +80,19 @@ tyCheck (TmIf tm1 tm2 tm3) = do ty1 <- tyCheck tm1
                                 return ty3
 tyCheck (TmFst tm)         = do ty <- tyCheck tm
                                 lift $ case ty of
-                                         (TyProd _ _) -> Right ()
-                                         _            -> Left $ EProd tm
-                                return ty
+                                         (TyProd ty' _) -> Right ty'
+                                         _              -> Left $ EProd tm
 tyCheck (TmSnd tm)         = do ty <- tyCheck tm
                                 lift $ case ty of
-                                         (TyProd _ _) -> Right ()
-                                         _            -> Left $ EProd tm
-                                return ty
+                                         (TyProd _ ty') -> Right ty'
+                                         _              -> Left $ EProd tm
 tyCheck (TmApp tm1 tm2)    = do ty1 <- tyCheck tm1
                                 ty2 <- tyCheck tm2
                                 lift $ case ty1 of
                                          (TyFun ty11 ty12)
                                            | ty11 == ty2 -> Right ty12
                                            | otherwise   -> Left $ EFun1 tm1 tm2
-                                         _                 -> Left $ EFun2 tm1
+                                         _               -> Left $ EFun2 tm1
 
 find :: Id -> TcType
 find x = do ctx <- ask
