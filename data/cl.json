@@ -1,0 +1,1 @@
+[{"input":"Just (App (App S K) K)","output":"Just (App (App S K) K)"}]
