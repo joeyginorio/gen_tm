@@ -10,25 +10,29 @@ import Control.Monad.Trans.Reader
 
 {- ================================= Syntax ================================= -}
 
-data Term = TmUnit                          -- Unit              {Intro.}
-          | TmTrue                          -- True
-          | TmFalse                         -- False
-          | TmVar  Id                       -- Variables
-          | TmProd Term Term                -- Products
-          | TmFun  Id Type Term             -- Functions
-          | TmIf   Term Term Term           -- If statements     {Elim.}
-          | TmFst  Term                     -- First projection
-          | TmSnd  Term                     -- Second projection
-          | TmApp  Term Term                -- Application
+-- | Lambda terms
+data Term = TmUnit                          -- ^ Unit              {Intro.}
+          | TmTrue                          -- ^ True
+          | TmFalse                         -- ^ False
+          | TmVar  Id                       -- ^ Variables
+          | TmProd Term Term                -- ^ Products
+          | TmFun  Id Type Term             -- ^ Functions
+          | TmIf   Term Term Term           -- ^ If statements     {Elim.}
+          | TmFst  Term                     -- ^ First projection
+          | TmSnd  Term                     -- ^ Second projection
+          | TmApp  Term Term                -- ^ Application
           deriving (Show, Eq)
 
-data Type = TyUnit                          -- Unit
-          | TyBool                          -- Booleans
-          | TyProd Type Type                -- Products
-          | TyFun  Type Type                -- Functions
+-- | Lambda types
+data Type = TyUnit                          -- ^ Unit
+          | TyBool                          -- ^ Booleans
+          | TyProd Type Type                -- ^ Products
+          | TyFun  Type Type                -- ^ Functions
           deriving (Show, Eq)
 
-type Binding = (Id, Type)                    -- e.g. x :: Bool => (x,Bool)
+-- | Binding,
+-- e.g., @x :: Bool => (x,Bool)@
+type Binding = (Id, Type)
 type Context = [Binding]
 
 
@@ -36,12 +40,13 @@ type Context = [Binding]
 
 --                                {Typechecker}
 
-data Error = EVar  Id         -- Variable not in context
-           | EIf1  Term       -- First term isn't Bool type
-           | EIf2  Term Term  -- Second and third term aren't the same type
-           | EProd Term       -- Term isn't product type
-           | EFun1 Term Term  -- Second term not valid iput to first term
-           | EFun2 Term       -- First term isn't a funtion
+-- | Typechecking errors
+data Error = EVar  Id         -- ^ Variable not in context
+           | EIf1  Term       -- ^ First term isn't Bool type
+           | EIf2  Term Term  -- ^ Second and third term aren't the same type
+           | EProd Term       -- ^ Term isn't product type
+           | EFun1 Term Term  -- ^ Second term not valid iput to first term
+           | EFun2 Term       -- ^ First term isn't a funtion
            deriving (Show)
 
 -- | Typecheck type = 'Reader' + 'Either' monad stack.
