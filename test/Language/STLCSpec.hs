@@ -167,5 +167,14 @@ prop_welltyped =
     let (Right ty') = runReaderT (tyCheck tm) []
     ty === ty'
 
+prop_welltypedNormalForm :: Property
+prop_welltypedNormalForm =
+  property $ do
+    ty <- forAll genTy
+    tm <- forAll (genWellTypedExp ty)
+    tm' <- pure $ flip runReader ids $ eval tm
+    let (Right ty') = runReaderT (tyCheck tm') []
+    ty === ty'
+
 testSTLC :: IO Bool
 testSTLC = checkParallel $$(discover)

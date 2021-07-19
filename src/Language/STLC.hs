@@ -192,7 +192,12 @@ eval (TmFst tm)                  = do tm' <- eval tm
 eval (TmSnd (TmProd tm1 tm2))    = eval tm2
 eval (TmSnd tm)                  = do tm' <- eval tm
                                       eval $ TmSnd tm'
-eval (TmApp (TmFun x _ tm1) tm2) = subst x tm2 tm1
+eval (TmApp (TmFun x _ tm1) tm2) = do tm <- subst x tm2 tm1
+                                      eval tm
 eval (TmApp tm1 tm2)             = do tm1' <- eval tm1
                                       eval $ TmApp tm1' tm2
 eval tm = return tm
+
+-- | Runs eval with a default list of fresh variable names
+evalR :: Term -> Term
+evalR = flip runReader ids . eval
