@@ -9,8 +9,10 @@ module Language.STLC.Dataset where
 
 import Language.STLC.Gen
 import Language.STLC
+import Language.STLC2CL (compile)
+import qualified Language.CL as CL
 import Data.Aeson
-import Data.Text
+import Data.Text (pack)
 import qualified Data.ByteString.Lazy as B
 
 
@@ -32,4 +34,24 @@ instance (Show a, Show b) => ToJSON (IOPair a b) where
 
 
 {- ============================= Data Generation ============================ -}
+
+-- | Dataset is a list of IOPairs
+type Dataset a = [IOPair a a]
+
+-- | Helper for building datasets
+buildDataset :: [a] -> [a] -> Dataset a
+buildDataset = zipWith IOPair
+
+-- | Generate two datasets, lhs of tuple is STLC, rhs of tuple is CL
+-- | NOTE: The input/output pairs are unnormalized/normalized terms
+genDataset :: Int -> (Dataset Term, Dataset (Maybe CL.Term))
+genDataset n = (buildDataset ins outs, buildDataset ins' outs')
+                where ins   = take n $ evalSearchS gen
+                      outs  = map evalR ins
+                      ins'  = map compile ins
+                      outs' = map (fmap CL.reduce) ins'
+
+-- | Exports dataset as a JSON
+exportDataset :: (Show a) => FilePath -> Dataset a -> IO ()
+exportDataset fname ds = B.writeFile fname (encode ds)
 
