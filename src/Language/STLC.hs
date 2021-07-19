@@ -198,3 +198,7 @@ eval (TmApp (TmFun x _ tm1) tm2) = subst x tm2 tm1
 eval (TmApp tm1 tm2)             = do tm1' <- eval tm1
                                       eval $ TmApp tm1' tm2
 eval tm = return tm
+
+-- | Runs eval with a default list of fresh variable names
+evalR :: Term -> Term
+evalR = flip runReader ids . eval
