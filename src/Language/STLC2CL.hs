@@ -123,6 +123,9 @@ toCL _            = Nothing
 -- >>> compile $ ST.TmFun "x" ST.TyBool ST.TmUnit
 -- Just (App K (App (App S K) K))
 --
+-- >>> compile $ ST.TmApp (ST.TmFun "x" ST.TyBool (ST.TmVar "x")) (ST.TmTrue)
+-- Just (App (App S K) K)
+--
 -- >>> compile $ ST.TmProd ST.TmTrue ST.TmUnit
 -- Just (App (App S (App (App S (App (App S K) K)) (App K (App (App S (App K K)) (App (App S K) K))))) (App K (App (App S K) K)))
 compile :: ST.Term -> Maybe CL.Term
