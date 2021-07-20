@@ -66,7 +66,7 @@ data Term' = S'
 -- Makes it simpler to implement the term rewriting algorithm for translating
 -- lambda to CL terms.
 toTerm' :: Term -> Term'
-toTerm' (TmVar x) = TmVar' x
+toTerm' (TmVar x)   = TmVar' x
 toTerm' (TmFun x t) = TmFun' x (toTerm' t)
 toTerm' (TmApp s t) = TmApp' (toTerm' s) (toTerm' t)
 
