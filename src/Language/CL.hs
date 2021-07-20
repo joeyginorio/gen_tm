@@ -20,4 +20,8 @@ reduce (App (App K x) y)         = reduce x
 reduce (App (App (App S x) y) z) = reduce (App xz yz)
                                    where xz = reduce (App x z)
                                          yz = reduce (App y z)
-reduce sk                        = sk
+reduce (App x y)                 | x /= x' || y /= y' = reduce $ App x' y'
+                                 | otherwise          = App x' y'
+                                 where x' = reduce x
+                                       y' = reduce y
+reduce tm                        = tm
