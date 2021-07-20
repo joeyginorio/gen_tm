@@ -62,6 +62,7 @@ test-suite spec
   hs-source-dirs:   test
   main-is:          Spec.hs
   other-modules:    Language.STLCSpec
+                  , Language.STLC2CLSpec
   build-depends:    QuickCheck
                   , base
                   , containers

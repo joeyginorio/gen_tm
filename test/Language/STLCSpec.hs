@@ -89,11 +89,11 @@ genWellTypedExp' ty =
         ]
 
 shrinkExp :: Term -> [Term]
--- shrinkExp (TmApp f a) = flip runReader ids $ do
---   f' <- eval f
---   case f' of
---     TmFun var _ b -> (: []) <$> (subst var a b >>= eval)
---     _ -> pure []
+shrinkExp (TmApp f a) = flip runReader ids $ do
+  f' <- eval f
+  case f' of
+    TmFun var _ b -> (: []) <$> (subst var a b >>= eval)
+    _ -> pure []
 shrinkExp _ = []
 
 genWellTypedExp'' :: Type -> GenM Term

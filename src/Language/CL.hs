@@ -8,7 +8,8 @@ module Language.CL where
 {- ================================= Syntax ================================= -}
 
 -- | Combinatory logic (CL) terms
-data Term  = S | K | App Term Term deriving Show
+data Term  = S | K | App Term Term
+  deriving (Show, Eq)
 
 
 {- ================================ Semantics =============================== -}

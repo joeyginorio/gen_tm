@@ -1,6 +1,10 @@
 module Main where
 
-import Language.STLCSpec
+import Control.Monad (void)
+import Language.STLC2CLSpec (testSTLC2CL)
+import Language.STLCSpec (testSTLC)
 
 main :: IO ()
-main = pure ()
+main = do
+  void testSTLC
+  void testSTLC2CL
