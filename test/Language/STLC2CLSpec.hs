@@ -15,8 +15,7 @@ prop_commutative =
     ty <- forAll genTy
     tm <- forAll (genWellTypedExp ty)
     let tm' = evalR tm
-        mcl = compile tm
-    (reduce <$> mcl) === compile tm'
+    (reduce <$> compile tm) === (reduce <$> compile tm')
 
 prop_skk_identity :: Property
 prop_skk_identity =
