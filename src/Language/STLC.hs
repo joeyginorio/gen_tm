@@ -47,7 +47,7 @@ data Error = EVar  Id         -- ^ Variable not in context
            | EProd Term       -- ^ Term isn't product type
            | EFun1 Term Term  -- ^ Second term not valid iput to first term
            | EFun2 Term       -- ^ First term isn't a funtion
-           deriving (Show)
+           deriving (Show, Eq)
 
 -- | Typecheck type = 'Reader' + 'Either' monad stack.
 --
@@ -60,8 +60,7 @@ tyCheck :: Term -> TcType
 tyCheck (TmUnit)           = return TyUnit
 tyCheck (TmTrue)           = return TyBool
 tyCheck (TmFalse)          = return TyBool
-tyCheck (TmVar x)          = do ctx <- ask
-                                ty  <- find x
+tyCheck (TmVar x)          = do ty  <- find x
                                 return ty
 tyCheck (TmProd tm1 tm2)   = do ty1 <- tyCheck tm1
                                 ty2 <- tyCheck tm2
@@ -173,9 +172,9 @@ subst x t (TmIf tm1 tm2 tm3) = do tm1' <- subst x t tm1
                                   tm3' <- subst x t tm3
                                   return $ TmIf tm1' tm2' tm3'
 subst x t (TmFst tm)         = do tm' <- subst x t tm
-                                  return $ TmFst tm
+                                  return $ TmFst tm'
 subst x t (TmSnd tm)         = do tm' <- subst x t tm
-                                  return $ TmSnd tm
+                                  return $ TmSnd tm'
 subst x t (TmApp tm1 tm2)    = do tm1' <- subst x t tm1
                                   tm2' <- subst x t tm2
                                   return $ TmApp tm1' tm2'
@@ -185,7 +184,7 @@ eval :: Term -> STerm
 eval (TmIf TmTrue tm2 _)         = eval tm2
 eval (TmIf TmFalse _ tm3)        = eval tm3
 eval (TmIf tm1 tm2 tm3)          = do tm1' <- eval tm1
-                                      eval $ TmIf tm1 tm2 tm3
+                                      eval $ TmIf tm1' tm2 tm3
 eval (TmFst (TmProd tm1 tm2))    = eval tm1
 eval (TmFst tm)                  = do tm' <- eval tm
                                       eval $ TmFst tm'

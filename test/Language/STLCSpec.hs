@@ -89,11 +89,11 @@ genWellTypedExp' ty =
         ]
 
 shrinkExp :: Term -> [Term]
-shrinkExp (TmApp f a) = flip runReader ids $ do
-  f' <- eval f
-  case f' of
-    TmFun var _ b -> (: []) <$> (subst var a b >>= eval)
-    _ -> pure []
+-- shrinkExp (TmApp f a) = flip runReader ids $ do
+--   f' <- eval f
+--   case f' of
+--     TmFun var _ b -> (: []) <$> (subst var a b >>= eval)
+--     _ -> pure []
 shrinkExp _ = []
 
 genWellTypedExp'' :: Type -> GenM Term
@@ -172,9 +172,9 @@ prop_welltypedNormalForm =
   property $ do
     ty <- forAll genTy
     tm <- forAll (genWellTypedExp ty)
-    let tm' = flip runReader ids $ eval tm
-    let (Right ty') = runReaderT (tyCheck tm') []
-    ty === ty'
+    let tm' = evalR tm
+    let ety' = runReaderT (tyCheck tm') []
+    Right ty === ety'
 
 testSTLC :: IO Bool
 testSTLC = checkParallel $$(discover)
