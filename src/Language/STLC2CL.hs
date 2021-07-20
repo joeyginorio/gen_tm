@@ -70,7 +70,7 @@ toTerm' (TmVar x) = TmVar' x
 toTerm' (TmFun x t) = TmFun' x (toTerm' t)
 toTerm' (TmApp s t) = TmApp' (toTerm' s) (toTerm' t)
 
--- | Fresh variables in a term
+-- | Free variables in a term
 fvs :: Term' -> Set Id
 fvs (S')             = empty
 fvs (K')             = empty
