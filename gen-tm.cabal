@@ -28,7 +28,6 @@ custom-setup
 
 library
   exposed-modules:  Language.STLC
-                  , Language.STLC.Dataset
                   , Language.STLC.Gen
                   , Language.CL
                   , Language.STLC2CL
@@ -48,12 +47,19 @@ library
 
 executable gen-tm
   main-is:          Main.hs
-  other-modules:    Paths_gen_tm
+  other-modules:    Dataset
+                  , Paths_gen_tm
   autogen-modules:  Paths_gen_tm
   hs-source-dirs:   exe
-  build-depends:    base
+  build-depends:    aeson
+                  , base
                   , bytestring >= 0.10.12.0
                   , gen-tm
+                  , optparse-applicative
+                  , pipes
+                  , pipes-bytestring
+                  , pipes-safe
+                  , text
   default-language: Haskell2010
   ghc-options:      -W -Wall -threaded -rtsopts -with-rtsopts=-N
 
