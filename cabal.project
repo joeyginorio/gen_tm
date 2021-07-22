@@ -4,3 +4,6 @@ packages:
 write-ghc-environment-files: always
 tests: true
 documentation: true
+library-profiling: true
+executable-profiling: true
+benchmarks: true

@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 {- STLC2CL.hs
    ==========
    Translate from simply-typed lambda calculus (STLC) to combinatory logic (CL).
@@ -11,6 +13,7 @@ module Language.STLC2CL where
 import Data.Set (Set, empty, delete, insert, union, member)
 import qualified Language.STLC as ST
 import qualified Language.CL as CL
+import Data.Text (Text)
 
 
 {- ====================== Stage 1: Erasure + Desugar ======================== -}
@@ -20,7 +23,7 @@ import qualified Language.CL as CL
 -- known as type-erasure. The second property is its basic data (bool, pairs)
 -- can be desugared into the pure untyped lambda calculus.
 
-type Id = String
+type Id = Text
 
 -- | Syntax of lambda calculus
 data Term = TmVar Id

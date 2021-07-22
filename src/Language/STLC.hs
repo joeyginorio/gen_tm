@@ -10,11 +10,13 @@ import Data.Set (Set, empty, delete, insert, union, member)
 import Control.Monad.Trans
 import Control.Monad.Trans.Reader
 import Data.Aeson.TH (defaultOptions, deriveJSON)
+import Data.Text (Text)
+import qualified Data.Text as Text
 
 {- ================================= Syntax ================================= -}
 
 -- | Identifiers are strings
-type Id = String
+type Id = Text
 
 -- | Lambda terms
 data Term = TmUnit                          -- ^ Unit              {Intro.}
@@ -116,9 +118,7 @@ find x = do ctx <- ask
 -- >>> take 10 ids
 -- ["#0","#1","#2","#3","#4","#5","#6","#7","#8","#9"]
 ids :: [Id]
-ids = zipWith (:) cs nums
-      where cs   = repeat '#'
-            nums = map show [0 :: Integer ..]
+ids = (\n -> Text.pack $ '#' : show n) <$> [0 :: Integer ..]
 
 -- | Fresh variables in a term
 fvs :: Term -> Set Id
