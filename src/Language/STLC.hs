@@ -1,3 +1,5 @@
+{-# LANGUAGE TemplateHaskell #-}
+
 {- STLC.hs
    =======
    Defines syntax and semantics of STLC. -}
@@ -7,8 +9,14 @@ module Language.STLC where
 import Data.Set (Set, empty, delete, insert, union, member)
 import Control.Monad.Trans
 import Control.Monad.Trans.Reader
+import Data.Aeson.TH (defaultOptions, deriveJSON)
+import Data.Text (Text)
+import qualified Data.Text as Text
 
 {- ================================= Syntax ================================= -}
+
+-- | Identifiers are strings
+type Id = Text
 
 -- | Lambda terms
 data Term = TmUnit                          -- ^ Unit              {Intro.}
@@ -34,6 +42,9 @@ data Type = TyUnit                          -- ^ Unit
 -- e.g., @x :: Bool => (x,Bool)@
 type Binding = (Id, Type)
 type Context = [Binding]
+
+$(deriveJSON defaultOptions ''Type)
+$(deriveJSON defaultOptions ''Term)
 
 
 {- ================================ Semantics =============================== -}
@@ -102,17 +113,12 @@ find x = do ctx <- ask
 
 --                                {Interpreter}
 
--- | Identifiers are strings
-type Id = String
-
 -- | Infinite list of fresh variable names
 --
 -- >>> take 10 ids
 -- ["#0","#1","#2","#3","#4","#5","#6","#7","#8","#9"]
 ids :: [Id]
-ids = zipWith (:) cs nums
-      where cs   = repeat '#'
-            nums = map show [0 :: Integer ..]
+ids = (\n -> Text.pack $ '#' : show n) <$> [0 :: Integer ..]
 
 -- | Fresh variables in a term
 fvs :: Term -> Set Id

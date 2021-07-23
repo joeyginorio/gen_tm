@@ -1,20 +1,58 @@
+{-# LANGUAGE RecordWildCards #-}
+
 {- Main.hs
    =======
-   Provides a CLI for generating and exporting datasets for STLC and CL, where
-   input  := unnormalized term
-   output := normalized term . -}
+   Provides a CLI for generating and exporting datasets for STLC and CL. -}
 
 module Main where
 
-import Language.STLC.Dataset
-import System.Environment
+import Dataset (stlc, toExample, writeJsonLines)
+import Options.Applicative (Parser, auto, execParser, fullDesc, header, help, helper, info, long, metavar, option, progDesc, short, showDefault, strOption, value, (<**>))
+import Pipes (runEffect, (>->))
+import qualified Pipes.Prelude as P
+import Pipes.Safe (runSafeT)
 
--- >>> :main 5 "data/stlc.json" "data/cl.json"
+data GenTmOpts = GenTmOpts
+  { outputFileName :: String,
+    numberOfExampes :: Int
+  }
+
+genTmOpts :: Parser GenTmOpts
+genTmOpts =
+  GenTmOpts
+    <$> strOption
+      ( long "output"
+          <> short 'o'
+          <> metavar "FILENAME"
+          <> help "Output filename"
+          <> showDefault
+          <> value "examples.jsonl"
+      )
+    <*> option
+      auto
+      ( long "number-of-examples"
+          <> short 'n'
+          <> metavar "INT"
+          <> help "Number of examples to generate"
+          <> showDefault
+          <> value 1
+      )
+
 main :: IO ()
-main = do args <- getArgs
-          let n      = args !! 0
-          let fname1 = args !! 1
-          let fname2 = args !! 2
-          let dsets  = genDatasets (read n)
-          exportDataset fname1 (fst dsets)
-          exportDataset fname2 (snd dsets)
+main = generateAndExport =<< execParser opts
+  where
+    opts =
+      info
+        (genTmOpts <**> helper)
+        ( fullDesc
+            <> progDesc "Generate and export datasets for STLC and CL"
+            <> header "gen-tm - a tool for generating and exporting datasets for STLC and CL"
+        )
+
+generateAndExport :: GenTmOpts -> IO ()
+generateAndExport GenTmOpts {..} =
+  runSafeT . runEffect $
+    stlc
+      >-> toExample
+      >-> P.take numberOfExampes
+      >-> writeJsonLines outputFileName

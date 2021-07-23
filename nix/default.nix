@@ -16,4 +16,11 @@ haskell-nix.project {
 
   compiler-nix-name = "ghc8105";
 
+  modules = [
+    {
+      packages.gen-tm.enableExecutableProfiling = true;
+      enableLibraryProfiling = true;
+    }
+  ];
+
 }

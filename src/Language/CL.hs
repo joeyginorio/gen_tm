@@ -1,3 +1,5 @@
+{-# LANGUAGE TemplateHaskell #-}
+
 {- CL.hs
    =====
    Defines syntax and semantics of SK-combinatory logic as both strings
@@ -5,11 +7,15 @@
 
 module Language.CL where
 
+import Data.Aeson.TH (defaultOptions, deriveJSON)
+
 {- ================================= Syntax ================================= -}
 
 -- | Combinatory logic (CL) terms
 data Term  = S | K | App Term Term
   deriving (Show, Eq)
+
+$(deriveJSON defaultOptions ''Term)
 
 
 {- ================================ Semantics =============================== -}
