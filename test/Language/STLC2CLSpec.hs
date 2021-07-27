@@ -6,8 +6,8 @@ import Control.Monad (MonadPlus (mzero))
 import Hedgehog (Property, checkParallel, discover, forAll, property, (===))
 import Language.CL (Term (..), reduce)
 import Language.STLC (evalR)
+import Language.STLC.Sample (genTy, genWellTypedExp)
 import Language.STLC2CL (compile)
-import Language.STLCSpec (genTy, genWellTypedExp)
 
 prop_commutative :: Property
 prop_commutative =

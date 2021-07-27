@@ -6,7 +6,9 @@
 
 module Main where
 
-import Dataset (stlc, toExample, writeJsonLines)
+import Dataset (sampleStlc, stlc, toExample, writeJsonLines)
+import Hedgehog (Seed)
+import qualified Hedgehog.Internal.Seed as Seed
 import Options.Applicative (Parser, auto, execParser, fullDesc, header, help, helper, info, long, metavar, option, progDesc, short, showDefault, strOption, value, (<**>))
 import Pipes (runEffect, (>->))
 import qualified Pipes.Prelude as P
@@ -14,7 +16,8 @@ import Pipes.Safe (runSafeT)
 
 data GenTmOpts = GenTmOpts
   { outputFileName :: String,
-    numberOfExampes :: Int
+    numberOfExampes :: Int,
+    seed :: Seed
   }
 
 genTmOpts :: Parser GenTmOpts
@@ -37,9 +40,20 @@ genTmOpts =
           <> showDefault
           <> value 1
       )
+    <*> ( Seed.from
+            <$> option
+              auto
+              ( long "seed"
+                  <> short 's'
+                  <> metavar "INT"
+                  <> help "Seed for the random number generator"
+                  <> showDefault
+                  <> value 43
+              )
+        )
 
 main :: IO ()
-main = generateAndExport =<< execParser opts
+main = generateAndExport' =<< execParser opts
   where
     opts =
       info
@@ -53,6 +67,16 @@ generateAndExport :: GenTmOpts -> IO ()
 generateAndExport GenTmOpts {..} =
   runSafeT . runEffect $
     stlc
+      >-> P.map (\(cost, ty, tm) -> (Just cost, ty, tm))
+      >-> toExample
+      >-> P.take numberOfExampes
+      >-> writeJsonLines outputFileName
+
+generateAndExport' :: GenTmOpts -> IO ()
+generateAndExport' GenTmOpts {..} =
+  runSafeT . runEffect $
+    sampleStlc seed
+      >-> P.map (\(ty, tm) -> (Nothing, ty, tm))
       >-> toExample
       >-> P.take numberOfExampes
       >-> writeJsonLines outputFileName
