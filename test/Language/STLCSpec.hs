@@ -10,6 +10,7 @@ import Control.Applicative (Alternative (empty, (<|>)))
 import Control.Monad.Morph (MFunctor (..))
 import Control.Monad.Reader
 import Control.Monad.State (MonadState (get), StateT, evalStateT, modify)
+import Control.Monad.Trans.Writer.Lazy
 import Data.Bool (bool)
 import Data.Functor ((<&>))
 import qualified Data.List as List
@@ -90,7 +91,7 @@ genWellTypedExp' ty =
         ]
 
 shrinkExp :: Term -> [Term]
-shrinkExp (TmApp f a) = flip runReader ids $ do
+shrinkExp (TmApp f a) = fst . flip runReader ids . runWriterT $ do
   f' <- eval f
   case f' of
     TmFun var _ b -> (: []) <$> (subst var a b >>= eval)
