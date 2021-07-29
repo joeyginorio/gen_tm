@@ -66,7 +66,7 @@ toExample = P.for cat $
   \(exCost, exTy, exSTLC) ->
     let exTyPretty = Text.pack . show $ exTy
         exSTLCPretty = Text.pack . show $ exSTLC
-        exReducedSTLC = ST.evalR exSTLC
+        exReducedSTLC = ST.eval' exSTLC
         exReducedSTLCPretty = Text.pack . show $ exReducedSTLC
      in case ST2CL.compile exSTLC of
           Just exCL ->
