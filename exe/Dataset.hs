@@ -71,7 +71,7 @@ toExample = P.for cat $
      in case ST2CL.compile exSTLC of
           Just exCL ->
             let exCLPretty = Text.pack . show $ exCL
-                exReducedCL = CL.reduce exCL
+                exReducedCL = CL.reduce' exCL
                 exReducedCLPretty = Text.pack . show $ exReducedCL
              in P.yield Example {..}
           Nothing -> pure ()
