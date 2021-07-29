@@ -9,8 +9,10 @@ module Language.STLC where
 import Data.Set (Set, empty, delete, insert, union, member)
 import Control.Monad.Trans
 import Control.Monad.Trans.Reader
+import Control.Monad.Trans.Writer.Lazy
 import Data.Aeson.TH (defaultOptions, deriveJSON)
 import Data.Text (Text)
+import Data.Monoid
 import qualified Data.Text as Text
 
 {- ================================= Syntax ================================= -}
@@ -149,15 +151,16 @@ aconv x y (TmFst tm)       = TmFst (aconv x y tm)
 aconv x y (TmSnd tm)       = TmSnd (aconv x y tm)
 aconv x y (TmApp tm1 tm2)  = TmApp (aconv x y tm1) (aconv x y tm2)
 
--- | Substituted term.
+-- | Writer/reader term.
 --
 -- 'Reader' monad carries around fresh identifiers
-type STerm = Reader [Id] Term
+-- 'Writer' monad tracks steps of computation
+type WRTerm = WriterT (Sum Integer) (Reader [Id]) Term
 
 -- | Capture-avoiding substitution.
 --
 -- @s[x/t]@ means a term @s@ where all @x@ are replaced with @t@
-subst :: Id -> Term -> Term -> STerm
+subst :: Id -> Term -> Term -> WRTerm
 subst x t (TmUnit)           = return TmUnit
 subst x t (TmTrue)           = return TmTrue
 subst x t (TmFalse)          = return TmFalse
@@ -167,10 +170,11 @@ subst x t (TmProd tm1 tm2)   = do tm1' <- subst x t tm1
                                   tm2' <- subst x t tm2
                                   return $ TmProd tm1' tm2'
 subst x t s@(TmFun y ty tm)  | x == y           = return $ TmFun y ty tm
-                             | member y (fvs t) = do ids <- ask
+                             | member y (fvs t) = do ids <- lift $ ask
                                                      let z  = head ids
                                                      let s' = aconv y z s
-                                                     local tail (subst x t s')
+                                                     tm' <- lift $ local tail (runWriterT $ subst x t s')
+                                                     return $ fst tm'
                              | otherwise        = do tm' <- subst x t tm
                                                      return $ TmFun y ty tm'
 subst x t (TmIf tm1 tm2 tm3) = do tm1' <- subst x t tm1
@@ -186,23 +190,32 @@ subst x t (TmApp tm1 tm2)    = do tm1' <- subst x t tm1
                                   return $ TmApp tm1' tm2'
 
 -- | The actual interpreter, using call-by-name evaluation order
-eval :: Term -> STerm
-eval (TmIf TmTrue tm2 _)         = eval tm2
-eval (TmIf TmFalse _ tm3)        = eval tm3
-eval (TmIf tm1 tm2 tm3)          = do tm1' <- eval tm1
+eval :: Term -> WRTerm
+eval (TmIf TmTrue tm2 _)         = tell (Sum 1) >> eval tm2
+eval (TmIf TmFalse _ tm3)        = tell (Sum 1) >> eval tm3
+eval (TmIf tm1 tm2 tm3)          = do tell $ Sum 1
+                                      tm1' <- eval tm1
                                       eval $ TmIf tm1' tm2 tm3
-eval (TmFst (TmProd tm1 tm2))    = eval tm1
-eval (TmFst tm)                  = do tm' <- eval tm
+eval (TmFst (TmProd tm1 tm2))    = tell (Sum 1) >> eval tm1
+eval (TmFst tm)                  = do tell $ Sum 1
+                                      tm' <- eval tm
                                       eval $ TmFst tm'
-eval (TmSnd (TmProd tm1 tm2))    = eval tm2
-eval (TmSnd tm)                  = do tm' <- eval tm
+eval (TmSnd (TmProd tm1 tm2))    = tell (Sum 1) >> eval tm2
+eval (TmSnd tm)                  = do tell $ Sum 1
+                                      tm' <- eval tm
                                       eval $ TmSnd tm'
-eval (TmApp (TmFun x _ tm1) tm2) = do tm <- subst x tm2 tm1
+eval (TmApp (TmFun x _ tm1) tm2) = do tell $ Sum 1
+                                      tm <- subst x tm2 tm1
                                       eval tm
-eval (TmApp tm1 tm2)             = do tm1' <- eval tm1
+eval (TmApp tm1 tm2)             = do tell $ Sum 1
+                                      tm1' <- eval tm1
                                       eval $ TmApp tm1' tm2
 eval tm = return tm
 
 -- | Runs eval with a default list of fresh variable names
-evalR :: Term -> Term
-evalR = flip runReader ids . eval
+evalWR :: Term -> (Term, Sum Integer)
+evalWR = flip runReader ids . runWriterT . eval
+
+-- | Ignores writer output to just give output term
+eval' :: Term -> Term
+eval' = fst . evalWR
