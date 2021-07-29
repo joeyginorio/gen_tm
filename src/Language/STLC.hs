@@ -191,19 +191,24 @@ subst x t (TmApp tm1 tm2)    = do tm1' <- subst x t tm1
 
 -- | The actual interpreter, using call-by-name evaluation order
 eval :: Term -> WRTerm
-eval (TmIf TmTrue tm2 _)         = eval tm2
-eval (TmIf TmFalse _ tm3)        = eval tm3
-eval (TmIf tm1 tm2 tm3)          = do tm1' <- eval tm1
+eval (TmIf TmTrue tm2 _)         = tell (Sum 1) >> eval tm2
+eval (TmIf TmFalse _ tm3)        = tell (Sum 1) >> eval tm3
+eval (TmIf tm1 tm2 tm3)          = do tell $ Sum 1
+                                      tm1' <- eval tm1
                                       eval $ TmIf tm1' tm2 tm3
-eval (TmFst (TmProd tm1 tm2))    = eval tm1
-eval (TmFst tm)                  = do tm' <- eval tm
+eval (TmFst (TmProd tm1 tm2))    = tell (Sum 1) >> eval tm1
+eval (TmFst tm)                  = do tell $ Sum 1
+                                      tm' <- eval tm
                                       eval $ TmFst tm'
-eval (TmSnd (TmProd tm1 tm2))    = eval tm2
-eval (TmSnd tm)                  = do tm' <- eval tm
+eval (TmSnd (TmProd tm1 tm2))    = tell (Sum 1) >> eval tm2
+eval (TmSnd tm)                  = do tell $ Sum 1
+                                      tm' <- eval tm
                                       eval $ TmSnd tm'
-eval (TmApp (TmFun x _ tm1) tm2) = do tm <- subst x tm2 tm1
+eval (TmApp (TmFun x _ tm1) tm2) = do tell $ Sum 1
+                                      tm <- subst x tm2 tm1
                                       eval tm
-eval (TmApp tm1 tm2)             = do tm1' <- eval tm1
+eval (TmApp tm1 tm2)             = do tell $ Sum 1
+                                      tm1' <- eval tm1
                                       eval $ TmApp tm1' tm2
 eval tm = return tm
 
