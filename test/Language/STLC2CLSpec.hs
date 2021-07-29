@@ -7,7 +7,6 @@ import Hedgehog (Property, checkParallel, discover, forAll, property, (===))
 import Language.CL (Term (..), reduce)
 import Language.STLC (eval')
 import Language.STLC2CL (compile)
-import Language.STLCSpec (genTy, genWellTypedExp)
 
 prop_commutative :: Property
 prop_commutative =
