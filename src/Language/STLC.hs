@@ -1,3 +1,6 @@
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 {- STLC.hs
@@ -10,13 +13,15 @@ import Data.Set (Set, empty, delete, insert, union, member)
 import Control.Monad.Trans
 import Control.Monad.Trans.Reader
 import Data.Aeson.TH (defaultOptions, deriveJSON)
-import Data.Text (Text)
-import qualified Data.Text as Text
+
+import GHC.Generics(Generic)
+import Data.MemoTrie
+
 
 {- ================================= Syntax ================================= -}
 
 -- | Identifiers are strings
-type Id = Text
+type Id = String
 
 -- | Lambda terms
 data Term = TmUnit                          -- ^ Unit              {Intro.}
@@ -29,14 +34,23 @@ data Term = TmUnit                          -- ^ Unit              {Intro.}
           | TmFst  Term                     -- ^ First projection
           | TmSnd  Term                     -- ^ Second projection
           | TmApp  Term Term                -- ^ Application
-          deriving (Show, Eq)
+          deriving (Show, Eq, Generic)
 
 -- | Lambda types
 data Type = TyUnit                          -- ^ Unit
           | TyBool                          -- ^ Booleans
           | TyProd Type Type                -- ^ Products
           | TyFun  Type Type                -- ^ Functions
-          deriving (Show, Eq, Ord)
+          deriving (Show, Eq, Ord, Generic)
+
+data Nat = Z | S Nat deriving (Eq, Show, Generic)
+
+instance HasTrie Type where
+  newtype (Type :->: b) = TypeTrie {unTypeTrie :: Reg Type :->: b}
+  trie = trieGeneric TypeTrie
+  untrie = untrieGeneric unTypeTrie
+  enumerate = enumerateGeneric unTypeTrie
+
 
 -- | Binding,
 -- e.g., @x :: Bool => (x,Bool)@
@@ -118,7 +132,7 @@ find x = do ctx <- ask
 -- >>> take 10 ids
 -- ["#0","#1","#2","#3","#4","#5","#6","#7","#8","#9"]
 ids :: [Id]
-ids = (\n -> Text.pack $ '#' : show n) <$> [0 :: Integer ..]
+ids = (\n -> '#' : show n) <$> [0 :: Integer ..]
 
 -- | Fresh variables in a term
 fvs :: Term -> Set Id
