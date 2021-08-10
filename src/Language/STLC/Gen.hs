@@ -1,3 +1,6 @@
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE DeriveGeneric #-}
 {- Gen.hs
    ======
    Term generator for simply typed lambda calculus. With STLC2CL we can
@@ -11,6 +14,9 @@ import Control.Monad.Search
 import Control.Monad.Trans
 import Control.Monad.Trans.State
 import Data.Monoid (Sum(..))
+import Data.MemoTrie
+import Data.Function (fix)
+-- import GHC.Generics (Generic)
 
 
 -- | Costs are integers
@@ -19,7 +25,7 @@ type Cost = Integer
 -- | Generates all closed terms in STLC
 gen :: SearchS (Sum Cost) (Type, Term)
 gen = do ty <- genTy
-         tm <- genTm [] ty
+         tm <- (memoFix2 genTm) [] ty
          return (ty, tm)
 
 -- | Helper function to easily run monad stack.
@@ -50,15 +56,16 @@ type SearchS c = SearchT c (State [Id])
 --
 -- >>> flip evalState ids . runSearchBestT $ genTm [] TyUnit
 -- Just (Sum {getSum = 1},TmUnit)
-genTm :: Context -> Type -> SearchS (Sum Cost) Term
-genTm ctx ty = genTmUnit ctx ty
-           <|> genTmBool ctx ty
-           <|> genTmVar  ctx ty
-           <|> genTmProd ctx ty
-           <|> genTmFun  ctx ty
-           <|> genTmFst  ctx ty
-           <|> genTmSnd  ctx ty
-           <|> genTmApp  ctx ty
+genTm :: (Context -> Type -> SearchS (Sum Cost) Term) -> Context -> Type -> SearchS (Sum Cost) Term
+genTm f ctx ty = genTmUnit ctx ty
+             <|> genTmBool ctx ty
+             <|> genTmVar  ctx ty
+             <|> genTmProd f ctx ty
+             <|> genTmIf   f ctx ty
+             <|> genTmFun  f ctx ty
+             <|> genTmFst  f ctx ty
+             <|> genTmSnd  f ctx ty
+             <|> genTmApp  f ctx ty
 
 -- | Generate unit terms
 genTmUnit :: Context -> Type -> SearchS (Sum Cost) Term
@@ -82,23 +89,23 @@ genTmVar ((x,ty):ctx) ty' | ty == ty' = do cost' (Sum 1)
                           | otherwise = genTmVar ctx ty'
 
 -- | Generate product terms
-genTmProd :: Context -> Type -> SearchS (Sum Cost) Term
-genTmProd ctx (TyProd ty1 ty2) = do cost' (Sum 1)
-                                    TmProd
-                                      <$> genTm ctx ty1
-                                      <*> genTm ctx ty2
-genTmProd _ _                  = abandon
+genTmProd :: (Context -> Type -> SearchS (Sum Cost) Term) -> Context -> Type -> SearchS (Sum Cost) Term
+genTmProd f ctx (TyProd ty1 ty2) = do cost' (Sum 1)
+                                      TmProd
+                                        <$> f ctx ty1
+                                        <*> f ctx ty2
+genTmProd _ _ _                  = abandon
 
 
 -- | Generate function terms
-genTmFun :: Context -> Type -> SearchS (Sum Cost) Term
-genTmFun ctx (TyFun ty1 ty2) = do cost' (Sum 1)
-                                  cost' (Sum (sizeTy ty1))
-                                  x <- lift $ gets head
-                                  lift $ modify tail
-                                  TmFun x ty1
-                                    <$> genTm ((x,ty1):ctx) ty2
-genTmFun _ _                 = abandon
+genTmFun :: (Context -> Type -> SearchS (Sum Cost) Term) -> Context -> Type -> SearchS (Sum Cost) Term
+genTmFun f ctx (TyFun ty1 ty2) = do cost' (Sum 1)
+                                    cost' (Sum (sizeTy ty1))
+                                    x <- lift $ gets head
+                                    lift $ modify tail
+                                    TmFun x ty1
+                                      <$> f ((x,ty1):ctx) ty2
+genTmFun _ _ _                 = abandon
 
 -- | Helper function for generating functions.
 --
@@ -110,34 +117,33 @@ sizeTy (TyProd ty1 ty2) = 1 + (sizeTy ty1) + (sizeTy ty2)
 sizeTy (TyFun ty1 ty2)  = 1 + (sizeTy ty1) + (sizeTy ty2)
 
 -- | Generate if-then-else terms
-genTmIf :: Context -> Type -> SearchS (Sum Cost) Term
-genTmIf ctx ty = do cost' (Sum 1)
-                    TmIf
-                      <$> genTm ctx TyBool
-                      <*> genTm ctx ty
-                      <*> genTm ctx ty
+genTmIf :: (Context -> Type -> SearchS (Sum Cost) Term) -> Context -> Type -> SearchS (Sum Cost) Term
+genTmIf f ctx ty = do cost' (Sum 1)
+                      TmIf
+                        <$> f ctx TyBool
+                        <*> f ctx ty
+                        <*> f ctx ty
 
 -- | Generate @TmFst@ terms
-genTmFst :: Context -> Type -> SearchS (Sum Cost) Term
-genTmFst ctx ty = do cost' (Sum 1)
-                     ty2 <- genTy
-                     TmFst
-                       <$> genTm ctx (TyProd ty ty2)
-
+genTmFst :: (Context -> Type -> SearchS (Sum Cost) Term) -> Context -> Type -> SearchS (Sum Cost) Term
+genTmFst f ctx ty = do cost' (Sum 1)
+                       ty2 <- genTy
+                       TmFst
+                         <$> f ctx (TyProd ty ty2)
 -- | Generate @TmSnd@ terms
-genTmSnd :: Context -> Type -> SearchS (Sum Cost) Term
-genTmSnd ctx ty = do cost' (Sum 1)
-                     ty1 <- genTy
-                     TmSnd
-                       <$> genTm ctx (TyProd ty1 ty)
+genTmSnd :: (Context -> Type -> SearchS (Sum Cost) Term) -> Context -> Type -> SearchS (Sum Cost) Term
+genTmSnd f ctx ty = do cost' (Sum 1)
+                       ty1 <- genTy
+                       TmSnd
+                         <$> f ctx (TyProd ty1 ty)
 
 -- | Generate @TmApp@ terms
-genTmApp :: Context -> Type -> SearchS (Sum Cost) Term
-genTmApp ctx ty = do cost' (Sum 1)
-                     ty1 <- genTy
-                     TmApp
-                       <$> genTm ctx (TyFun ty1 ty)
-                       <*> genTm ctx ty1
+genTmApp :: (Context -> Type -> SearchS (Sum Cost) Term) -> Context -> Type -> SearchS (Sum Cost) Term
+genTmApp f ctx ty = do cost' (Sum 1)
+                       ty1 <- genTy
+                       TmApp
+                         <$> f ctx (TyFun ty1 ty)
+                         <*> f ctx ty1
 
 
 {- ============================ Type Generator ============================== -}
@@ -175,3 +181,6 @@ genTyFun = do cost' (Sum 1)
               TyFun
                 <$> genTy
                 <*> genTy
+
+memoFix2 :: (HasTrie a, HasTrie b) => ((a -> b -> c) -> (a -> b -> c)) -> (a -> b -> c)
+memoFix2 h = fix $ mup memo . h
