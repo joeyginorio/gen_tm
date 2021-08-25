@@ -1,19 +1,25 @@
+{ config ? {}
+, sourcesOverride ? {}
+, pkgs
+}:
+
+with pkgs;
+
 let
 
-  project = import ./nix/default.nix {};
-
-in
-
-  project.shellFor {
-    withHoogle = true;
+  shell = pkgs.gen-tm.shellFor {
+    name = "gen-tm-dev-shell";
 
     tools = {
       cabal = "latest";
-      hlint = "latest";
-      haskell-language-server = "latest";
+      haskell-language-server = "1.3.0";
     };
 
-    buildInputs = [ (import <nixpkgs> {}).git ];
-
     exactDeps = true;
-  }
+
+    withHoogle = true;
+  };
+
+in
+
+  shell
