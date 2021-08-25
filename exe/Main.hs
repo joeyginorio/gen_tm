@@ -7,67 +7,22 @@
 
 module Main where
 
-import Dataset (sampleStlc, toExample, writeJsonLines)
-import Hedgehog (Seed)
-import qualified Hedgehog.Internal.Seed as Seed
-import Options.Applicative
-import Pipes (runEffect, (>->))
+import qualified Dataset
+import qualified Options.Applicative as Opts
+import qualified Opts
+import Pipes ((>->))
 import qualified Pipes.Prelude as P
-import Pipes.Safe (runSafeT)
-
-data GenTmOpts = GenTmOpts
-  { outputFileName :: String,
-    numberOfExampes :: Int,
-    seed :: Seed
-  }
-
-genTmOpts :: Parser GenTmOpts
-genTmOpts =
-  GenTmOpts
-    <$> strOption
-      ( long "output"
-          <> short 'o'
-          <> metavar "FILENAME"
-          <> help "Output filename"
-          <> showDefault
-          <> value "examples.jsonl"
-      )
-    <*> option
-      auto
-      ( long "number-of-examples"
-          <> short 'n'
-          <> metavar "INT"
-          <> help "Number of examples to generate"
-          <> showDefault
-          <> value 1
-      )
-    <*> ( Seed.from
-            <$> option
-              auto
-              ( long "seed"
-                  <> short 's'
-                  <> metavar "INT"
-                  <> help "Seed for the random number generator"
-                  <> showDefault
-                  <> value 43
-              )
-        )
+import qualified Pipes.Safe as P
+import qualified Pipes as P
 
 main :: IO ()
-main = generateAndExport =<< execParser opts
-  where
-    opts =
-      info
-        (genTmOpts <**> helper)
-        ( fullDesc
-            <> progDesc "Generate and export datasets for STLC and CL"
-            <> header "gen-tm - a tool for generating and exporting datasets for STLC and CL"
-        )
+main = generateAndExport =<< Opts.execParser Opts.opts
 
-generateAndExport :: GenTmOpts -> IO ()
-generateAndExport GenTmOpts {..} =
-  runSafeT . runEffect $
-    sampleStlc seed
-      >-> toExample
+generateAndExport :: Opts.Config -> IO ()
+generateAndExport Opts.Config {..} =
+  P.runSafeT . P.runEffect $
+    Dataset.sampleStlc seed
+      >-> Dataset.toExample
+      >-> Dataset.deduplicate (\Dataset.Example {..} -> exSTLC2TermPretty)
       >-> P.take numberOfExampes
-      >-> writeJsonLines outputFileName
+      >-> Dataset.writeJsonLines outputFileName
