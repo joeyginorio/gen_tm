@@ -186,21 +186,60 @@ eval' :: Term -> Term
 eval' = fst . evalWR
 
 -- | Convert a term to a Template Haskell expression
-toTH :: Term -> TH.Exp
-toTH TmUnit = TH.TupE []
-toTH TmTrue = TH.ConE $ TH.mkName "True"
-toTH TmFalse = TH.ConE $ TH.mkName "False"
-toTH (TmVar x) = TH.VarE $ TH.mkName $ Text.unpack x
-toTH (TmFun x _ty tm) = TH.LamE [TH.VarP $ TH.mkName $ Text.unpack x] $ toTH tm
-toTH (TmIf tm1 tm2 tm3) = TH.CondE (toTH tm1) (toTH tm2) (toTH tm3)
-toTH (TmApp tm1 tm2) = TH.AppE (toTH tm1) (toTH tm2)
+toTHExp :: Term -> TH.Exp
+toTHExp = toTHExp' False
+
+-- | Convert a term to a Template Haskell expression with type signature
+toTHExpWithSig :: Term -> TH.Exp
+toTHExpWithSig = toTHExp' True
+
+toTHExp' :: Bool -> Term -> TH.Exp
+toTHExp' _ TmUnit = TH.TupE []
+toTHExp' _ TmTrue = TH.ConE $ TH.mkName "True"
+toTHExp' _ TmFalse = TH.ConE $ TH.mkName "False"
+toTHExp' _ (TmVar x) = TH.VarE $ TH.mkName $ Text.unpack x
+toTHExp' withSig (TmFun x ty tm) = 
+  let varP False name = TH.VarP name
+      varP True name = TH.SigP (TH.VarP name) (toTHType ty)
+  in TH.LamE [varP withSig $ TH.mkName $ Text.unpack x] $ toTHExp' withSig tm
+toTHExp' withSig (TmIf tm1 tm2 tm3) = TH.CondE (toTHExp' withSig tm1) (toTHExp' withSig tm2) (toTHExp' withSig tm3)
+toTHExp' withSig (TmApp tm1 tm2) = TH.AppE (toTHExp' withSig tm1) (toTHExp' withSig tm2)
+
+-- | Convert a type to a Template Haskell type
+toTHType :: Type -> TH.Type
+toTHType TyUnit = TH.TupleT 0
+toTHType TyBool = TH.ConT (TH.mkName "Bool")
+toTHType (TyFun ty ty') = TH.AppT (TH.AppT TH.ArrowT (toTHType ty)) (toTHType ty')
 
 -- | Pretty-print a term using Haskell syntax
 --
--- >>> pprint $ TmApp (TmFun "x" TyBool (TmVar "x")) (TmApp (TmFun "y" TyBool (TmVar "y")) (TmApp (TmFun "z" TyBool (TmVar "z")) TmTrue))
+-- >>> pprintTerm $ TmApp (TmFun "x" TyBool (TmVar "x")) (TmApp (TmFun "y" TyBool (TmVar "y")) (TmApp (TmFun "z" TyBool (TmVar "z")) TmTrue))
 -- "(\\x -> x) ((\\y -> y) ((\\z -> z) True))"
 --
--- >>> pprint $ TmIf (TmApp (TmFun "x" TyBool TmTrue) TmFalse) (TmFun "y" TyBool TmTrue) (TmFun "z" TyBool (TmVar "z"))
+-- >>> pprintTerm $ TmIf (TmApp (TmFun "x" TyBool TmTrue) TmFalse) (TmFun "y" TyBool TmTrue) (TmFun "z" TyBool (TmVar "z"))
 -- "if (\\x -> True) False then \\y -> True else \\z -> z"
-pprint :: Term -> String
-pprint = TH.pprint . toTH
+pprintTerm :: Term -> String
+pprintTerm = TH.pprint . toTHExp
+
+-- | Pretty-print a term using Haskell syntax with type signature
+--
+-- >>> pprintTermWithSig $ TmApp (TmFun "x" TyBool (TmVar "x")) (TmApp (TmFun "y" TyBool (TmVar "y")) (TmApp (TmFun "z" TyBool (TmVar "z")) TmTrue))
+-- "(\\(x :: Bool) -> x) ((\\(y :: Bool) -> y) ((\\(z :: Bool) -> z) True))"
+--
+-- >>> pprintTermWithSig $ TmIf (TmApp (TmFun "x" TyBool TmTrue) TmFalse) (TmFun "y" TyBool TmTrue) (TmFun "z" TyBool (TmVar "z"))
+-- "if (\\(x :: Bool) -> True) False\n then \\(y :: Bool) -> True\n else \\(z :: Bool) -> z"
+pprintTermWithSig :: Term -> String
+pprintTermWithSig = TH.pprint . toTHExpWithSig
+
+-- | Pretty-print a type using Haskell syntax
+--
+-- >>> pprintType $ TyBool
+-- "Bool"
+
+-- >>> pprintType $ TyFun TyBool TyBool
+-- "Bool -> Bool"
+--
+-- >>> pprintType $ TyFun (TyFun TyUnit TyBool) TyBool 
+-- "(() -> Bool) -> Bool"
+pprintType :: Type -> String
+pprintType = TH.pprint . toTHType

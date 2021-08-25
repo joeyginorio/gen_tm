@@ -151,15 +151,50 @@ eval' :: Term -> Term
 eval' = fst . evalWR
 
 -- | Convert a term to a Template Haskell expression
-toTH :: Term -> TH.Exp
-toTH TmUnit = TH.TupE []
-toTH (TmVar x) = TH.VarE $ TH.mkName $ Text.unpack x
-toTH (TmFun x _ty tm) = TH.LamE [TH.VarP $ TH.mkName $ Text.unpack x] $ toTH tm
-toTH (TmApp tm1 tm2) = TH.AppE (toTH tm1) (toTH tm2)
+toTHExp :: Term -> TH.Exp
+toTHExp = toTHExp' False
+
+-- | Convert a term to a Template Haskell expression with type signature
+toTHExpWithSig :: Term -> TH.Exp
+toTHExpWithSig = toTHExp' True
+
+toTHExp' :: Bool -> Term -> TH.Exp
+toTHExp' _ TmUnit = TH.TupE []
+toTHExp' _ (TmVar x) = TH.VarE $ TH.mkName $ Text.unpack x
+toTHExp' withSig (TmFun x ty tm) = 
+  let varP False name = TH.VarP name
+      varP True name = TH.SigP (TH.VarP name) (toTHType ty)
+  in TH.LamE [varP withSig $ TH.mkName $ Text.unpack x] $ toTHExp' withSig tm
+toTHExp' withSig (TmApp tm1 tm2) = TH.AppE (toTHExp' withSig tm1) (toTHExp' withSig tm2)
+
+-- | Convert a type to a Template Haskell type
+toTHType :: Type -> TH.Type
+toTHType TyUnit = TH.TupleT 0
+toTHType (TyFun ty ty') = TH.AppT (TH.AppT TH.ArrowT (toTHType ty)) (toTHType ty')
 
 -- | Pretty-print a term using Haskell syntax
 --
--- >>> pprint $ TmApp (TmFun "x" TyUnit (TmVar "x")) TmUnit
+-- >>> pprintTerm $ TmApp (TmFun "x" TyUnit (TmVar "x")) TmUnit
 -- "(\\x -> x) ()"
-pprint :: Term -> String
-pprint = TH.pprint . toTH
+pprintTerm :: Term -> String
+pprintTerm = TH.pprint . toTHExp
+
+-- | Pretty-print a term using Haskell syntax with type signature
+--
+-- >>> pprintTermWithSig $ TmApp (TmFun "x" TyUnit (TmVar "x")) TmUnit
+-- "(\\(x :: ()) -> x) ()"
+pprintTermWithSig :: Term -> String
+pprintTermWithSig = TH.pprint . toTHExpWithSig
+
+-- | Pretty-print a type using Haskell syntax
+--
+-- >>> pprintType $ TyUnit
+-- "()"
+--
+-- >>> pprintType $ TyFun TyUnit TyUnit
+-- "() -> ()"
+--
+-- >>> pprintType $ TyFun (TyFun TyUnit TyUnit) TyUnit 
+-- "(() -> ()) -> ()"
+pprintType :: Type -> String
+pprintType = TH.pprint . toTHType

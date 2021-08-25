@@ -41,10 +41,14 @@ data Example where
       exSTLC2Term :: !STLC2.Term,
       -- | Pretty-printed example simply-typed lambda calculus term
       exSTLC2TermPretty :: !Text,
+      -- | Pretty-printed example simply-typed lambda calculus term with type signatures
+      exSTLC2TermPrettyWithSig :: !Text,
       -- | Reduced example simply-typed lambda calculus term
       exReducedSTLC2Term :: !STLC2.Term,
       -- | Pretty-printed reduced example simply-typed lambda calculus term
-      exReducedSTLC2TermPretty :: !Text
+      exReducedSTLC2TermPretty :: !Text,
+      -- | Pretty-printed reduced example simply-typed lambda calculus term with type signatures
+      exReducedSTLC2TermPrettyWithSig :: !Text
     } ->
     Example
   deriving stock (Show, Eq)
@@ -65,10 +69,12 @@ sampleStlc =
 toExample :: forall m. Monad m => P.Pipe (STLC2.Type, STLC2.Term) Example m ()
 toExample = P.for P.cat $
   \(exSTLC2Type, exSTLC2Term) ->
-    let exSTLC2TypePretty = Text.pack . show $ exSTLC2Type
-        exSTLC2TermPretty = Text.pack . STLC2.pprint $ exSTLC2Term
+    let exSTLC2TypePretty = Text.pack . STLC2.pprintType $ exSTLC2Type
+        exSTLC2TermPretty = Text.pack . STLC2.pprintTerm $ exSTLC2Term
+        exSTLC2TermPrettyWithSig = Text.pack . STLC2.pprintTermWithSig $ exSTLC2Term
         exReducedSTLC2Term = STLC2.eval' exSTLC2Term
-        exReducedSTLC2TermPretty = Text.pack . STLC2.pprint $ exReducedSTLC2Term
+        exReducedSTLC2TermPretty = Text.pack . STLC2.pprintTerm $ exReducedSTLC2Term
+        exReducedSTLC2TermPrettyWithSig = Text.pack . STLC2.pprintTermWithSig $ exReducedSTLC2Term
      in P.yield Example {..}
 
 -- | Deduplicate the examples.
