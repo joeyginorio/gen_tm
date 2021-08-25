@@ -23,7 +23,7 @@ import Data.Text (Text)
 -- known as type-erasure. The second property is its basic data (bool, pairs)
 -- can be desugared into the pure untyped lambda calculus.
 
-type Id = Text
+type Id = String
 
 -- | Syntax of lambda calculus
 data Term = TmVar Id

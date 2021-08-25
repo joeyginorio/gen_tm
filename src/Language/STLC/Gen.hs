@@ -28,6 +28,13 @@ gen = do ty <- genTy
          tm <- (memoFix2 genTm) [] ty
          return (ty, tm)
 
+-- | Generates all closed terms in STLC
+gen' :: SearchS (Sum Cost) (Type, Term)
+gen' = do ty <- genTy
+          tm <- (fix genTm) [] ty
+          return (ty, tm)
+
+
 -- | Helper function to easily run monad stack.
 --
 -- NOTE: Returns an infinite list. Use 'take' to force finite amount
@@ -184,3 +191,25 @@ genTyFun = do cost' (Sum 1)
 
 memoFix2 :: (HasTrie a, HasTrie b) => ((a -> b -> c) -> (a -> b -> c)) -> (a -> b -> c)
 memoFix2 h = fix $ mup memo . h
+
+data Nat = Z | S Nat deriving (Eq, Show)
+
+
+type SearchN c = SearchT c (State Int)
+
+z :: Int -> Search (Sum Cost) Nat
+z 0 = abandon
+z n = (cost' $ Sum 1) >> pure Z
+
+suc :: Int -> Search (Sum Cost) Nat
+suc 0 = abandon
+suc n = (cost' $ Sum 1) >> S <$> nat (n-1)
+
+nat :: Int -> Search (Sum Cost) Nat
+nat n = z n <|> suc n
+
+evalSearchN :: Int -> SearchN (Sum Cost) a -> [(Sum Cost, a)]
+evalSearchN n = flip evalState n . runSearchT
+
+nat' :: Search (Sum Cost) Nat
+nat' = (cost' $ Sum 1) >> (pure Z <|> S <$> nat')

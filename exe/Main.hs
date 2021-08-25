@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE RecordWildCards #-}
 
 {- Main.hs
@@ -13,6 +14,11 @@ import Options.Applicative (Parser, auto, execParser, fullDesc, header, help, he
 import Pipes (runEffect, (>->))
 import qualified Pipes.Prelude as P
 import Pipes.Safe (runSafeT)
+import Control.Monad.Logic
+import Control.Applicative
+import Language.STLC.Gen2
+import Control.Monad.Trans.State
+import Language.STLC(ids)
 
 data GenTmOpts = GenTmOpts
   { outputFileName :: String,
@@ -52,16 +58,20 @@ genTmOpts =
               )
         )
 
+
 main :: IO ()
-main = generateAndExport' =<< execParser opts
-  where
-    opts =
-      info
-        (genTmOpts <**> helper)
-        ( fullDesc
-            <> progDesc "Generate and export datasets for STLC and CL"
-            <> header "gen-tm - a tool for generating and exporting datasets for STLC and CL"
-        )
+main = print $ length $ (evalState $ observeManyT 5000 gen) ids
+
+-- main :: IO ()
+-- main = generateAndExport' =<< execParser opts
+--   where
+--     opts =
+--       info
+--         (genTmOpts <**> helper)
+--         ( fullDesc
+--             <> progDesc "Generate and export datasets for STLC and CL"
+--             <> header "gen-tm - a tool for generating and exporting datasets for STLC and CL"
+--         )
 
 generateAndExport :: GenTmOpts -> IO ()
 generateAndExport GenTmOpts {..} =

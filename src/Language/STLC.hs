@@ -43,7 +43,7 @@ data Type = TyUnit                          -- ^ Unit
           | TyFun  Type Type                -- ^ Functions
           deriving (Show, Eq, Ord, Generic)
 
-data Nat = Z | S Nat deriving (Eq, Show, Generic)
+-- data Nat = Z | S Nat deriving (Eq, Show, Generic)
 
 instance HasTrie Type where
   newtype (Type :->: b) = TypeTrie {unTypeTrie :: Reg Type :->: b}

@@ -109,7 +109,7 @@ freshVar :: GenM Id
 freshVar = lift . FreshT $ do
   i <- get
   modify succ
-  pure (Text.pack $ '#' : show i)
+  pure ('#' : show i)
 
 insertVar :: Id -> Type -> Map Type [Term] -> Map Type [Term]
 insertVar x ty = Map.insertWith (<>) ty [TmVar x] . fmap (List.filter (/= TmVar x))

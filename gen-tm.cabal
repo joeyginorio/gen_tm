@@ -29,6 +29,7 @@ custom-setup
 library
   exposed-modules:  Language.STLC
                   , Language.STLC.Gen
+                  , Language.STLC.Gen2
                   , Language.STLC.Sample
                   , Language.CL
                   , Language.STLC2CL
@@ -39,10 +40,16 @@ library
                   , base
                   , bytestring >= 0.10.12.0
                   , containers
+                  , dlist >= 1.0
                   , hedgehog
+                  , logict >= 0.7.0.3
                   , mmorph
                   , monad-dijkstra
                   , mtl
+                  , optparse-applicative >= 0.16.1.0
+                  , pipes >= 4.3.16
+                  , pipes >= 4.3.16
+                  , pipes-safe >= 2.3.3
                   , text >= 1.2.4.1
                   , transformers
   hs-source-dirs:   src
@@ -59,17 +66,23 @@ executable gen-tm
                   , aeson
                   , base
                   , bytestring >= 0.10.12.0
+                  , dlist >= 1.0
                   , gen-tm
                   , hedgehog
+                  , logict >= 0.7.0.3
                   , mtl
                   , optparse-applicative
+                  , optparse-applicative >= 0.16.1.0
                   , pipes
+                  , pipes >= 4.3.16
+                  , pipes >= 4.3.16
                   , pipes-bytestring
                   , pipes-safe
+                  , pipes-safe >= 2.3.3
                   , text
                   , transformers
   default-language: Haskell2010
-  ghc-options:      -W -Wall -O2 -threaded -rtsopts
+  ghc-options:      -W -Wall -O2 -threaded -rtsopts -prof -fexternal-interpreter
 
 test-suite spec
   type:             exitcode-stdio-1.0
@@ -83,13 +96,19 @@ test-suite spec
                   , base
                   , bytestring >= 0.10.12.0
                   , containers
+                  , dlist >= 1.0
                   , gen-tm
                   , hedgehog
                   , hedgehog-quickcheck
                   , hspec
                   , hspec-hedgehog
+                  , logict >= 0.7.0.3
                   , mmorph
                   , mtl
+                  , optparse-applicative >= 0.16.1.0
+                  , pipes >= 4.3.16
+                  , pipes >= 4.3.16
+                  , pipes-safe >= 2.3.3
                   , text
                   , transformers
   default-language: Haskell2010
@@ -104,6 +123,12 @@ test-suite doctests
   build-depends:    MemoTrie >= 0.6.10
                   , base
                   , bytestring >= 0.10.12.0
+                  , dlist >= 1.0
                   , doctest
+                  , logict >= 0.7.0.3
+                  , optparse-applicative >= 0.16.1.0
+                  , pipes >= 4.3.16
+                  , pipes >= 4.3.16
+                  , pipes-safe >= 2.3.3
   default-language: Haskell2010
   ghc-options:      -W -Wall -O2 -threaded -rtsopts -with-rtsopts=-N
