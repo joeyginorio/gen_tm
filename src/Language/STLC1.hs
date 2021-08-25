@@ -1,4 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 {- STLC1.hs
    ========
@@ -6,14 +7,15 @@
 
 module Language.STLC1 where
 
-import Data.Set (Set, empty, delete, insert, union, member)
 import Control.Monad.Trans
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Writer.Lazy
 import Data.Aeson.TH (defaultOptions, deriveJSON)
-import Data.Text (Text)
 import Data.Monoid
+import Data.Set (Set, delete, empty, insert, member, union)
+import Data.Text (Text)
 import qualified Data.Text as Text
+import qualified Language.Haskell.TH as TH
 
 {- ================================= Syntax ================================= -}
 
@@ -59,9 +61,8 @@ type TcType = ReaderT Context (Either Error) Type
 
 -- | Typecheck terms
 tyCheck :: Term -> TcType
-tyCheck (TmUnit)           = return TyUnit
-tyCheck (TmVar x)          = do ty  <- find x
-                                return ty
+tyCheck TmUnit             = return TyUnit
+tyCheck (TmVar x)          = find x
 tyCheck (TmFun x ty1 tm)   = do ty2 <- local ((x,ty1):) $ tyCheck tm
                                 return $ TyFun ty1 ty2
 tyCheck (TmApp tm1 tm2)    = do ty1 <- tyCheck tm1
@@ -84,22 +85,22 @@ find x = do ctx <- ask
 -- | Infinite list of fresh variable names
 --
 -- >>> take 10 ids
--- ["#0","#1","#2","#3","#4","#5","#6","#7","#8","#9"]
+-- ["x0","x1","x2","x3","x4","x5","x6","x7","x8","x9"]
 ids :: [Id]
-ids = (\n -> Text.pack $ '#' : show n) <$> [0 :: Integer ..]
+ids = (\n -> Text.pack $ 'x' : show n) <$> [0 :: Integer ..]
 
 -- | Fresh variables in a term
 fvs :: Term -> Set Id
-fvs (TmUnit)           = empty
+fvs TmUnit             = empty
 fvs (TmVar x)          = insert x empty
 fvs (TmFun x _ tm)     = delete x $ fvs tm
-fvs (TmApp tm1 tm2)    = union (fvs tm1) (fvs tm2)
+fvs (TmApp tm1 tm2)    = fvs tm1 `union` fvs tm2
 
 -- | alpha conversion of terms (renaming of variables).
 --
 -- @aconv x y tm@ means change all @x@ to @y@ in @tm@
 aconv :: Id -> Id -> Term -> Term
-aconv x y (TmUnit)         = TmUnit
+aconv x y TmUnit           = TmUnit
 aconv x y (TmVar z)        | x == z    = TmVar y
                            | otherwise = TmVar z
 aconv x y (TmFun z ty tm)  | x == z    = TmFun y ty (aconv x y tm)
@@ -116,11 +117,11 @@ type WRTerm = WriterT (Sum Integer) (Reader [Id]) Term
 --
 -- @s[x/t]@ means a term @s@ where all @x@ are replaced with @t@
 subst :: Id -> Term -> Term -> WRTerm
-subst x t (TmUnit)           = return TmUnit
+subst x t TmUnit             = return TmUnit
 subst x t (TmVar y)          | x == y    = return t
                              | otherwise = return $ TmVar y
 subst x t s@(TmFun y ty tm)  | x == y           = return $ TmFun y ty tm
-                             | member y (fvs t) = do ids <- lift $ ask
+                             | member y (fvs t) = do ids <- lift ask
                                                      let z  = head ids
                                                      let s' = aconv y z s
                                                      tm' <- lift $ local tail (runWriterT $ subst x t s')
@@ -148,3 +149,17 @@ evalWR = flip runReader ids . runWriterT . eval
 -- | Ignores writer output to just give output term
 eval' :: Term -> Term
 eval' = fst . evalWR
+
+-- | Convert a term to a Template Haskell expression
+toTH :: Term -> TH.Exp
+toTH TmUnit = TH.TupE []
+toTH (TmVar x) = TH.VarE $ TH.mkName $ Text.unpack x
+toTH (TmFun x _ty tm) = TH.LamE [TH.VarP $ TH.mkName $ Text.unpack x] $ toTH tm
+toTH (TmApp tm1 tm2) = TH.AppE (toTH tm1) (toTH tm2)
+
+-- | Pretty-print a term using Haskell syntax
+--
+-- >>> pprint $ TmApp (TmFun "x" TyUnit (TmVar "x")) TmUnit
+-- "(\\x -> x) ()"
+pprint :: Term -> String
+pprint = TH.pprint . toTH

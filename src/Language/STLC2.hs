@@ -1,4 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 {- STLC.hs
    =======
@@ -14,6 +15,7 @@ import Data.Aeson.TH (defaultOptions, deriveJSON)
 import Data.Text (Text)
 import Data.Monoid
 import qualified Data.Text as Text
+import qualified Language.Haskell.TH as TH
 
 {- ================================= Syntax ================================= -}
 
@@ -182,3 +184,23 @@ evalWR = flip runReader ids . runWriterT . eval
 -- | Ignores writer output to just give output term
 eval' :: Term -> Term
 eval' = fst . evalWR
+
+-- | Convert a term to a Template Haskell expression
+toTH :: Term -> TH.Exp
+toTH TmUnit = TH.TupE []
+toTH TmTrue = TH.ConE $ TH.mkName "True"
+toTH TmFalse = TH.ConE $ TH.mkName "False"
+toTH (TmVar x) = TH.VarE $ TH.mkName $ Text.unpack x
+toTH (TmFun x _ty tm) = TH.LamE [TH.VarP $ TH.mkName $ Text.unpack x] $ toTH tm
+toTH (TmIf tm1 tm2 tm3) = TH.CondE (toTH tm1) (toTH tm2) (toTH tm3)
+toTH (TmApp tm1 tm2) = TH.AppE (toTH tm1) (toTH tm2)
+
+-- | Pretty-print a term using Haskell syntax
+--
+-- >>> pprint $ TmApp (TmFun "x" TyBool (TmVar "x")) (TmApp (TmFun "y" TyBool (TmVar "y")) (TmApp (TmFun "z" TyBool (TmVar "z")) TmTrue))
+-- "(\\x -> x) ((\\y -> y) ((\\z -> z) True))"
+--
+-- >>> pprint $ TmIf (TmApp (TmFun "x" TyBool TmTrue) TmFalse) (TmFun "y" TyBool TmTrue) (TmFun "z" TyBool (TmVar "z"))
+-- "if (\\x -> True) False then \\y -> True else \\z -> z"
+pprint :: Term -> String
+pprint = TH.pprint . toTH
