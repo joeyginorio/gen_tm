@@ -7,7 +7,7 @@ with pkgs;
 
 let
 
-  shell = pkgs.gen-tm.shellFor {
+  shell = pkgs.gen-tm-project.shellFor {
     name = "gen-tm-dev-shell";
 
     tools = {

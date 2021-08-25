@@ -53,6 +53,9 @@
                       rev = "d7a745e9b5ae76a4bf4ee79a9fdf41cf6f1662bf";
                       sha256 = "0rxnkijdvglhamqfn8krsnnpj3s7kz2v5n5ndy37a41l161jqczx";
                     };
+                    sha256map = {
+                      "https://github.com/hsyl20/ghc-api-compat"."8fee87eac97a538dbe81ff1ab18cff10f2f9fa15" = "16bibb7f3s2sxdvdy2mq6w1nj1lc8zhms54lwmj17ijhvjys29vg";
+                    };
                   })).haskell-language-server.components.exes.haskell-language-server;
             };
           };
@@ -65,7 +68,7 @@
         })
 
         (final: prev: {
-          gen-tm-project = final.haskell-nix.project {
+          gen-tm-project = final.haskell-nix.project' {
 
             src = final.haskell-nix.haskellLib.cleanGit {
               name = "gen-tm";
