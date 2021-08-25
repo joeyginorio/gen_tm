@@ -30,7 +30,7 @@
       inherit (lib);
       inherit (iohkNix.lib) collectExes;
 
-      supportedSystems = ["x86_64-darwin" "x86_64-linux"];
+      supportedSystems = ["x86_64-linux" "x86_64-darwin"];
 
       gitrev = self.rev or "dirty";
 
@@ -65,9 +65,9 @@
         })
 
         (final: prev: {
-          gen-tm-project = prev.haskell-nix.project {
+          gen-tm-project = final.haskell-nix.project {
 
-            src = prev.haskell-nix.haskellLib.cleanGit {
+            src = final.haskell-nix.haskellLib.cleanGit {
               name = "gen-tm";
               src = ./.;
             };
@@ -88,8 +88,6 @@
       let
         pkgs = import nixpkgs { inherit system overlays; };
 
-        legacyPkgs = haskell-nix.legacyPackages.${system}.appendOverlays overlays;
-
         inherit (pkgs.commonLib) eachEnv environments;
 
         devShell =  import ./shell.nix {
@@ -103,7 +101,7 @@
         exes = collectExes flake.packages;
 
       in lib.recursiveUpdate flake {
-        inherit environments checks legacyPkgs;
+        inherit environments checks;
 
         defaultPackage = flake.packages."gen-tm:exe:gen-tm";
 
