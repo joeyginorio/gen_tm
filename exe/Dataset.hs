@@ -19,11 +19,8 @@ import Hedgehog (Gen)
 import Hedgehog.Internal.Gen (evalGen)
 import qualified Hedgehog.Internal.Seed as Seed
 import qualified Hedgehog.Internal.Tree as Tree
-import qualified Language.CL as CL
-import qualified Language.STLC as ST
-import qualified Language.STLC.Gen as ST
+import qualified Language.STLC2 as ST
 import Language.STLC.Sample (genTy, genWellTypedExp)
-import qualified Language.STLC2CL as ST2CL
 import Pipes (Consumer, Pipe, Producer, cat, each, (>->))
 import qualified Pipes as P
 import qualified Pipes.ByteString as P hiding (map, take)
@@ -47,18 +44,11 @@ data Example where
       exSTLC :: !ST.Term,
       -- | Pretty-printed example simply-typed lambda calculus term
       exSTLCPretty :: !Text,
-      -- | Example combinatory logic term
-      exCL :: !CL.Term,
-      -- | Pretty-printed example combinatory logic term
-      exCLPretty :: !Text,
       -- | Reduced example simply-typed lambda calculus term
       exReducedSTLC :: !ST.Term,
       -- | Pretty-printed reduced example simply-typed lambda calculus term
-      exReducedSTLCPretty :: !Text,
+      exReducedSTLCPretty :: !Text
       -- | Reduced example combinatory logic term
-      exReducedCL :: !CL.Term,
-      -- | Pretty-printed reduced example combinatory logic term
-      exReducedCLPretty :: !Text
     } ->
     Example
   deriving stock (Show, Eq)
@@ -66,8 +56,8 @@ data Example where
 $(deriveJSON defaultOptions ''Example)
 
 -- | Deterministic producer of costs, types, and simply-typed lambda calculus terms.
-stlc :: forall m. Monad m => Producer (ST.Cost, ST.Type, ST.Term) m ()
-stlc = each (ST.evalSearchS ST.gen) >-> P.map (\(Sum cost, (ty, tm)) -> (cost, ty, tm))
+-- stlc :: forall m. Monad m => Producer (ST.Cost, ST.Type, ST.Term) m ()
+-- stlc = each (ST.evalSearchS ST.gen) >-> P.map (\(Sum cost, (ty, tm)) -> (cost, ty, tm))
 
 -- | Nondeterministic producer of types and simply-typed lambda calculus terms.
 sampleStlc :: forall m. Monad m => Seed.Seed -> Producer (ST.Type, ST.Term) m ()
@@ -100,13 +90,7 @@ toExample = P.for cat $
         exSTLCPretty = Text.pack . show $ exSTLC
         exReducedSTLC = ST.eval' exSTLC
         exReducedSTLCPretty = Text.pack . show $ exReducedSTLC
-     in case ST2CL.compile exSTLC of
-          Just exCL ->
-            let exCLPretty = Text.pack . show $ exCL
-                exReducedCL = CL.reduce' exCL
-                exReducedCLPretty = Text.pack . show $ exReducedCL
-             in P.yield Example {..}
-          Nothing -> pure ()
+     in P.yield Example {..}
 
 -- | Write a JSON Lines text file with the examples.
 --
