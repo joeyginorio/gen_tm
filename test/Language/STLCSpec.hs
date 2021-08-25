@@ -20,7 +20,7 @@ import Data.Maybe (fromMaybe)
 import qualified Data.Text as Text
 import Hedgehog (Gen, MonadGen (..), Property, checkParallel, discover, distributeT, forAll, property, (===))
 import qualified Hedgehog.Gen as Gen
-import Language.STLC
+import Language.STLC2
 
 newtype FreshT m a = FreshT {unFreshT :: (StateT Int m) a}
   deriving stock (Functor)
@@ -66,7 +66,6 @@ genTy =
       pure TyBool
     ]
     [ -- recursive generators
-      TyProd <$> genTy <*> genTy,
       TyFun <$> genTy <*> genTy
     ]
 
@@ -101,7 +100,6 @@ shrinkExp _ = []
 genWellTypedExp'' :: Type -> GenM Term
 genWellTypedExp'' TyUnit = pure TmUnit
 genWellTypedExp'' TyBool = Gen.bool <&> bool TmTrue TmFalse
-genWellTypedExp'' (TyProd ty ty') = TmProd <$> genWellTypedExp' ty <*> genWellTypedExp' ty'
 genWellTypedExp'' (TyFun ty ty') = do
   var <- freshVar
   TmFun var ty <$> local (insertVar var ty) (genWellTypedExp' ty')
@@ -117,20 +115,12 @@ insertVar x ty = Map.insertWith (<>) ty [TmVar x] . fmap (List.filter (/= TmVar 
 
 genWellTypedExp''' :: Type -> GenM Term
 genWellTypedExp''' ty =
-  let tmFst = do
-        ty' <- genKnownTypeMaybe
-        tm <- genWellTypedExp'' (TyProd ty ty')
-        pure (TmFst tm)
-      tmSnd = do
-        ty' <- genKnownTypeMaybe
-        tm <- genWellTypedExp'' (TyProd ty' ty)
-        pure (TmSnd tm)
-      tmIf = do
+  let tmIf = do
         tm <- genWellTypedExp'' TyBool
         tm' <- genWellTypedExp'' ty
         tm'' <- genWellTypedExp'' ty
         pure (TmIf tm tm' tm'')
-   in tmFst <|> tmSnd <|> tmIf
+   in tmIf
 
 genWellTypedApp :: Type -> GenM Term
 genWellTypedApp ty = do

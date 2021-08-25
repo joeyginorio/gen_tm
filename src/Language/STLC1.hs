@@ -1,10 +1,10 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-{- STLC.hs
-   =======
+{- STLC1.hs
+   ========
    Defines syntax and semantics of STLC. -}
 
-module Language.STLC2 where
+module Language.STLC1 where
 
 import Data.Set (Set, empty, delete, insert, union, member)
 import Control.Monad.Trans
@@ -17,24 +17,18 @@ import qualified Data.Text as Text
 
 {- ================================= Syntax ================================= -}
 
-type Cost = Integer
-
 -- | Identifiers are strings
 type Id = Text
 
 -- | Lambda terms
 data Term = TmUnit                          -- ^ Unit              {Intro.}
-          | TmTrue                          -- ^ True
-          | TmFalse                         -- ^ False
           | TmVar  Id                       -- ^ Variables
           | TmFun  Id Type Term             -- ^ Functions
-          | TmIf   Term Term Term           -- ^ If statements     {Elim.}
           | TmApp  Term Term                -- ^ Application
           deriving (Show, Eq)
 
 -- | Lambda types
 data Type = TyUnit                          -- ^ Unit
-          | TyBool                          -- ^ Booleans
           | TyFun  Type Type                -- ^ Functions
           deriving (Show, Eq, Ord)
 
@@ -53,8 +47,6 @@ $(deriveJSON defaultOptions ''Term)
 
 -- | Typechecking errors
 data Error = EVar  Id         -- ^ Variable not in context
-           | EIf1  Term       -- ^ First term isn't Bool type
-           | EIf2  Term Term  -- ^ Second and third term aren't the same type
            | EFun1 Term Term  -- ^ Second term not valid iput to first term
            | EFun2 Term       -- ^ First term isn't a funtion
            deriving (Show, Eq)
@@ -68,22 +60,10 @@ type TcType = ReaderT Context (Either Error) Type
 -- | Typecheck terms
 tyCheck :: Term -> TcType
 tyCheck (TmUnit)           = return TyUnit
-tyCheck (TmTrue)           = return TyBool
-tyCheck (TmFalse)          = return TyBool
 tyCheck (TmVar x)          = do ty  <- find x
                                 return ty
 tyCheck (TmFun x ty1 tm)   = do ty2 <- local ((x,ty1):) $ tyCheck tm
                                 return $ TyFun ty1 ty2
-tyCheck (TmIf tm1 tm2 tm3) = do ty1 <- tyCheck tm1
-                                lift $ if ty1 == TyBool
-                                         then Left $ EIf1 tm1
-                                         else Right ()
-                                ty2 <- tyCheck tm2
-                                ty3 <- tyCheck tm3
-                                lift $ if ty2 == ty3
-                                         then Left $ EIf2 tm2 tm3
-                                         else Right ()
-                                return ty3
 tyCheck (TmApp tm1 tm2)    = do ty1 <- tyCheck tm1
                                 ty2 <- tyCheck tm2
                                 lift $ case ty1 of
@@ -111,11 +91,8 @@ ids = (\n -> Text.pack $ '#' : show n) <$> [0 :: Integer ..]
 -- | Fresh variables in a term
 fvs :: Term -> Set Id
 fvs (TmUnit)           = empty
-fvs (TmTrue)           = empty
-fvs (TmFalse)          = empty
 fvs (TmVar x)          = insert x empty
 fvs (TmFun x _ tm)     = delete x $ fvs tm
-fvs (TmIf tm1 tm2 tm3) = union (fvs tm1) $ union (fvs tm2) (fvs tm3)
 fvs (TmApp tm1 tm2)    = union (fvs tm1) (fvs tm2)
 
 -- | alpha conversion of terms (renaming of variables).
@@ -123,8 +100,6 @@ fvs (TmApp tm1 tm2)    = union (fvs tm1) (fvs tm2)
 -- @aconv x y tm@ means change all @x@ to @y@ in @tm@
 aconv :: Id -> Id -> Term -> Term
 aconv x y (TmUnit)         = TmUnit
-aconv x y (TmTrue)         = TmTrue
-aconv x y (TmFalse)        = TmFalse
 aconv x y (TmVar z)        | x == z    = TmVar y
                            | otherwise = TmVar z
 aconv x y (TmFun z ty tm)  | x == z    = TmFun y ty (aconv x y tm)
@@ -142,8 +117,6 @@ type WRTerm = WriterT (Sum Integer) (Reader [Id]) Term
 -- @s[x/t]@ means a term @s@ where all @x@ are replaced with @t@
 subst :: Id -> Term -> Term -> WRTerm
 subst x t (TmUnit)           = return TmUnit
-subst x t (TmTrue)           = return TmTrue
-subst x t (TmFalse)          = return TmFalse
 subst x t (TmVar y)          | x == y    = return t
                              | otherwise = return $ TmVar y
 subst x t s@(TmFun y ty tm)  | x == y           = return $ TmFun y ty tm
@@ -154,21 +127,12 @@ subst x t s@(TmFun y ty tm)  | x == y           = return $ TmFun y ty tm
                                                      return $ fst tm'
                              | otherwise        = do tm' <- subst x t tm
                                                      return $ TmFun y ty tm'
-subst x t (TmIf tm1 tm2 tm3) = do tm1' <- subst x t tm1
-                                  tm2' <- subst x t tm2
-                                  tm3' <- subst x t tm3
-                                  return $ TmIf tm1' tm2' tm3'
 subst x t (TmApp tm1 tm2)    = do tm1' <- subst x t tm1
                                   tm2' <- subst x t tm2
                                   return $ TmApp tm1' tm2'
 
 -- | The actual interpreter, using call-by-name evaluation order
 eval :: Term -> WRTerm
-eval (TmIf TmTrue tm2 _)         = tell (Sum 1) >> eval tm2
-eval (TmIf TmFalse _ tm3)        = tell (Sum 1) >> eval tm3
-eval (TmIf tm1 tm2 tm3)          = do tell $ Sum 1
-                                      tm1' <- eval tm1
-                                      eval $ TmIf tm1' tm2 tm3
 eval (TmApp (TmFun x _ tm1) tm2) = do tell $ Sum 1
                                       tm <- subst x tm2 tm1
                                       eval tm
