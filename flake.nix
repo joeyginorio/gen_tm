@@ -65,9 +65,9 @@
         })
 
         (final: prev: {
-          gen-tm-project = haskell-nix.project {
+          gen-tm-project = prev.haskell-nix.project {
 
-            src = haskell-nix.haskellLib.cleanGit {
+            src = prev.haskell-nix.haskellLib.cleanGit {
               name = "gen-tm";
               src = ../.;
             };
