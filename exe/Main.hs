@@ -10,13 +10,10 @@ module Main where
 import Dataset (sampleStlc, toExample, writeJsonLines)
 import Hedgehog (Seed)
 import qualified Hedgehog.Internal.Seed as Seed
-import Options.Applicative (Parser, auto, execParser, fullDesc, header, help, helper, info, long, metavar, option, progDesc, short, showDefault, strOption, value, (<**>))
+import Options.Applicative
 import Pipes (runEffect, (>->))
 import qualified Pipes.Prelude as P
 import Pipes.Safe (runSafeT)
-import Control.Applicative
-import Control.Monad.Trans.State
-import Language.STLC2(ids)
 
 data GenTmOpts = GenTmOpts
   { outputFileName :: String,
@@ -56,9 +53,8 @@ genTmOpts =
               )
         )
 
-
 main :: IO ()
-main = generateAndExport' =<< execParser opts
+main = generateAndExport =<< execParser opts
   where
     opts =
       info
@@ -68,20 +64,10 @@ main = generateAndExport' =<< execParser opts
             <> header "gen-tm - a tool for generating and exporting datasets for STLC and CL"
         )
 
--- generateAndExport :: GenTmOpts -> IO ()
--- generateAndExport GenTmOpts {..} =
---   runSafeT . runEffect $
---     stlc
---       >-> P.map (\(cost, ty, tm) -> (Just cost, ty, tm))
---       >-> toExample
---       >-> P.take numberOfExampes
---       >-> writeJsonLines outputFileName
-
-generateAndExport' :: GenTmOpts -> IO ()
-generateAndExport' GenTmOpts {..} =
+generateAndExport :: GenTmOpts -> IO ()
+generateAndExport GenTmOpts {..} =
   runSafeT . runEffect $
     sampleStlc seed
-      >-> P.map (\(ty, tm) -> (Nothing, ty, tm))
       >-> toExample
       >-> P.take numberOfExampes
       >-> writeJsonLines outputFileName

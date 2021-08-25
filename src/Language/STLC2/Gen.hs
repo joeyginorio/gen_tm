@@ -3,9 +3,9 @@
    Term generator for simply typed lambda calculus. With STLC2CL we can
    also use the generator for combinatory logic. -}
 
-module Language.STLC.Gen where
+module Language.STLC2.Gen where
 
-import Language.STLC
+import Language.STLC2
 import Control.Applicative
 import Control.Monad.Search
 import Control.Monad.Trans
@@ -83,10 +83,10 @@ genTmVar ((x,ty):ctx) ty' | ty == ty' = do cost' (Sum 1)
 
 -- | Generate product terms
 genTmProd :: Context -> Type -> SearchS (Sum Cost) Term
-genTmProd ctx (TyProd ty1 ty2) = do cost' (Sum 1)
-                                    TmProd
-                                      <$> genTm ctx ty1
-                                      <*> genTm ctx ty2
+-- genTmProd ctx (TyProd ty1 ty2) = do cost' (Sum 1)
+--                                     TmProd
+--                                       <$> genTm ctx ty1
+--                                       <*> genTm ctx ty2
 genTmProd _ _                  = abandon
 
 
@@ -106,7 +106,7 @@ genTmFun _ _                 = abandon
 sizeTy :: Type -> Cost
 sizeTy (TyUnit)         = 1
 sizeTy (TyBool)         = 1
-sizeTy (TyProd ty1 ty2) = 1 + (sizeTy ty1) + (sizeTy ty2)
+-- sizeTy (TyProd ty1 ty2) = 1 + (sizeTy ty1) + (sizeTy ty2)
 sizeTy (TyFun ty1 ty2)  = 1 + (sizeTy ty1) + (sizeTy ty2)
 
 -- | Generate if-then-else terms
@@ -119,17 +119,19 @@ genTmIf ctx ty = do cost' (Sum 1)
 
 -- | Generate @TmFst@ terms
 genTmFst :: Context -> Type -> SearchS (Sum Cost) Term
-genTmFst ctx ty = do cost' (Sum 1)
-                     ty2 <- genTy
-                     TmFst
-                       <$> genTm ctx (TyProd ty ty2)
+-- genTmFst ctx ty = do cost' (Sum 1)
+--                      ty2 <- genTy
+--                      TmFst
+--                        <$> genTm ctx (TyProd ty ty2)
+genTmFst _ _ = abandon
 
 -- | Generate @TmSnd@ terms
 genTmSnd :: Context -> Type -> SearchS (Sum Cost) Term
-genTmSnd ctx ty = do cost' (Sum 1)
-                     ty1 <- genTy
-                     TmSnd
-                       <$> genTm ctx (TyProd ty1 ty)
+-- genTmSnd ctx ty = do cost' (Sum 1)
+--                      ty1 <- genTy
+--                      TmSnd
+--                        <$> genTm ctx (TyProd ty1 ty)
+genTmSnd _ _ = abandon
 
 -- | Generate @TmApp@ terms
 genTmApp :: Context -> Type -> SearchS (Sum Cost) Term
@@ -164,10 +166,11 @@ genTyBool = do cost' (Sum 1)
 
 -- | Generate product type
 genTyProd :: SearchS (Sum Cost) Type
-genTyProd = do cost' (Sum 1)
-               TyProd
-                 <$> genTy
-                 <*> genTy
+-- genTyProd = do cost' (Sum 1)
+--                TyProd
+--                  <$> genTy
+--                  <*> genTy
+genTyProd = abandon
 
 -- | Generate function type
 genTyFun :: SearchS (Sum Cost) Type

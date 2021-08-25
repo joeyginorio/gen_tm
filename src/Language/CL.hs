@@ -27,7 +27,7 @@ type WTerm = Writer (Sum Integer) Term
 
 -- | Reduce (execute) a CL term
 reduce :: Term -> WTerm
-reduce (App (App K x) y)         = tell (Sum 1) >> reduce x
+reduce (App (App K x) _y)         = tell (Sum 1) >> reduce x
 reduce (App (App (App S x) y) z) = do tell $ Sum 1
                                       xz <- reduce $ App x z
                                       yz <- reduce $ App y z

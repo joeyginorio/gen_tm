@@ -27,9 +27,13 @@ custom-setup
                   , cabal-doctest >= 1 && <1.1
 
 library
-  exposed-modules:  Language.STLC1
+  exposed-modules:  Control.Monad.Fresh
+                  , Language.STLC1
                   , Language.STLC2
-                  , Language.STLC.Sample
+                  , Language.STLC2.Gen
+                  , Language.STLC2.Sample
+                  , Language.STLC2.ToCL
+                  , Language.CL
                   , Paths_gen_tm
   autogen-modules:  Paths_gen_tm
   build-depends:    aeson >= 1.5.6.0
@@ -83,7 +87,8 @@ test-suite spec
   type:             exitcode-stdio-1.0
   hs-source-dirs:   test
   main-is:          Spec.hs
-  other-modules:    Language.STLCSpec
+  other-modules:    Language.STLC2Spec
+                  , Language.STLC2.ToCLSpec
   build-depends:    QuickCheck
                   , base
                   , base

@@ -17,8 +17,6 @@ import qualified Data.Text as Text
 
 {- ================================= Syntax ================================= -}
 
-type Cost = Integer
-
 -- | Identifiers are strings
 type Id = Text
 
