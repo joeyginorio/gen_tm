@@ -24,7 +24,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, haskell-nix, libtorch-nix, utils, iohkNix, ... }: with utils.lib;
+  outputs = { self, nixpkgs, haskell-nix, utils, iohkNix, ... }: with utils.lib;
     let
       inherit (nixpkgs) lib;
       inherit (lib);
