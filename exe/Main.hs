@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE RecordWildCards #-}
 
 {- Main.hs
@@ -13,6 +14,9 @@ import Options.Applicative (Parser, auto, execParser, fullDesc, header, help, he
 import Pipes (runEffect, (>->))
 import qualified Pipes.Prelude as P
 import Pipes.Safe (runSafeT)
+import Control.Applicative
+import Control.Monad.Trans.State
+import Language.STLC(ids)
 
 data GenTmOpts = GenTmOpts
   { outputFileName :: String,
@@ -51,6 +55,7 @@ genTmOpts =
                   <> value 43
               )
         )
+
 
 main :: IO ()
 main = generateAndExport' =<< execParser opts
