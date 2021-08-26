@@ -84,13 +84,13 @@
                 enableLibraryProfiling = true;
 
                 packages.gen-tm.components.exes.gen-tm.configureFlags =
-                  lib.optionals stdenv.hostPlatform.isMusl [
+                  lib.optionals final.stdenv.hostPlatform.isMusl [
                     "--disable-executable-dynamic"
                     "--disable-shared"
                     "--ghc-option=-optl=-pthread"
                     "--ghc-option=-optl=-static"
-                    "--ghc-option=-optl=-L${gmp6.override { withStatic = true; }}/lib"
-                    "--ghc-option=-optl=-L${zlib.static}/lib"
+                    "--ghc-option=-optl=-L${final.gmp6.override { withStatic = true; }}/lib"
+                    "--ghc-option=-optl=-L${finalzlib.static}/lib"
                   ];
               }
             ];
