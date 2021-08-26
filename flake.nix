@@ -24,11 +24,12 @@
     };
   };
 
-  outputs = { self, nixpkgs, haskell-nix, utils, iohkNix, ... }: with utils.lib;
+  outputs = { self, nixpkgs, haskell-nix, utils, iohkNix, ... }:
     let
       inherit (nixpkgs) lib;
-      inherit (lib);
-      inherit (iohkNix.lib) collectExes;
+      inherit (lib) mapAttrs getAttrs attrNames;
+      inherit (utils.lib) eachSystem;
+      inherit (iohkNix.lib) prefixNamesWith collectExes;
 
       supportedSystems = ["x86_64-linux" "x86_64-darwin"];
 
@@ -99,14 +100,25 @@
 
         flake = pkgs.gen-tm-project.flake {};
 
-        checks = collectChecks flake.packages;
+        staticFlake = pkgs.pkgsStatic.gen-tm-project.flake {};
 
         exes = collectExes flake.packages;
+        exeNames = attrNames exes;
+        lazyCollectExe = p: getAttrs exeNames (collectExes p);
+
+        packages = {
+          inherit (pkgs) gen-tm;
+        }
+        // exes
+        // (prefixNamesWith "static/"
+              (mapAttrs pkgs.rewriteStatic (lazyCollectExe staticFlake.packages)));
 
       in lib.recursiveUpdate flake {
-        inherit environments checks;
+        inherit environments packages;
 
         defaultPackage = flake.packages."gen-tm:exe:gen-tm";
+
+        defaultApp = utils.lib.mkApp { drv = flake.packages."gen-tm:exe:gen-tm"; };
 
         inherit devShell;
       }
