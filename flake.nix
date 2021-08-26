@@ -90,7 +90,7 @@
                     "--ghc-option=-optl=-pthread"
                     "--ghc-option=-optl=-static"
                     "--ghc-option=-optl=-L${final.gmp6.override { withStatic = true; }}/lib"
-                    "--ghc-option=-optl=-L${finalzlib.static}/lib"
+                    "--ghc-option=-optl=-L${final.zlib.static}/lib"
                   ];
               }
             ];
