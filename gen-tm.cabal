@@ -65,6 +65,7 @@ executable gen-tm
   autogen-modules:  Paths_gen_tm
   hs-source-dirs:   exe
   build-depends:    aeson
+                  , ansi-terminal
                   , base
                   , bytestring >= 0.10.12.0
                   , gen-tm
@@ -81,6 +82,7 @@ executable gen-tm
                   , pipes-safe
                   , pipes-safe >= 2.3.3
                   , pipes-safe >= 2.3.3
+                  , terminal-progress-bar
                   , text
                   , transformers
                   , unordered-containers

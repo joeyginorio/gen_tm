@@ -6,9 +6,9 @@ import qualified Hedgehog.Internal.Seed as Gen.Seed
 import qualified Options.Applicative as Opts
 
 data Config = Config
-  { outputFileName :: String,
-    numberOfExampes :: Int,
-    seed :: Gen.Seed
+  { configOutputFileName :: String,
+    configNumberOfExampes :: Int,
+    configSeed :: Gen.Seed
   }
 
 config :: Opts.Parser Config
