@@ -7,105 +7,89 @@
 
 module Dataset where
 
-import Control.Monad.State (MonadState (get, put), StateT, evalStateT)
+import Control.Monad.IO.Class (MonadIO (liftIO))
+import Control.Monad.State (MonadState (get), evalStateT, modify)
 import Data.Aeson (ToJSON (toEncoding))
 import Data.Aeson.Encoding (encodingToLazyByteString)
 import Data.Aeson.TH (defaultOptions, deriveJSON)
+import qualified Data.ByteString as BS
 import Data.ByteString.Lazy (snoc, toStrict)
-import Data.Monoid (Sum (Sum))
+import qualified Data.HashSet as HashSet
+import Data.Hashable (Hashable)
 import Data.Text (Text)
 import qualified Data.Text as Text
-import Hedgehog (Gen)
-import Hedgehog.Internal.Gen (evalGen)
+import qualified Hedgehog.Internal.Gen as Gen
 import qualified Hedgehog.Internal.Seed as Seed
-import qualified Hedgehog.Internal.Tree as Tree
-import qualified Language.STLC2 as ST
-import Language.STLC.Sample (genTy, genWellTypedExp)
-import Pipes (Consumer, Pipe, Producer, cat, each, (>->))
+import qualified Language.STLC2 as STLC2
+import qualified Language.STLC2.Sample as STLC2.Sample
+import Pipes ((>->))
 import qualified Pipes as P
-import qualified Pipes.ByteString as P hiding (map, take)
-import Pipes.Lift (distribute)
-import Pipes.Prelude (repeatM)
-import qualified Pipes.Prelude as P hiding (toHandle)
-import Pipes.Safe (MonadSafe)
-import Pipes.Safe.Prelude (withFile)
+import qualified Pipes.Lift as P
+import qualified Pipes.Prelude as P
+import qualified Pipes.Safe as P
+import qualified Pipes.Safe.Prelude as P
 import qualified System.IO as IO
 
 -- | Examples in the dataset have this data type.
 data Example where
   Example ::
-    { -- | Example cost
-      exCost :: !(Maybe ST.Cost),
-      -- | Example type
-      exTy :: !ST.Type,
+    { -- | Example type
+      exSTLC2Type :: !STLC2.Type,
       -- | Pretty-printed example type
-      exTyPretty :: !Text,
+      exSTLC2TypePretty :: !Text,
       -- | Example simply-typed lambda calculus term
-      exSTLC :: !ST.Term,
+      exSTLC2Term :: !STLC2.Term,
       -- | Pretty-printed example simply-typed lambda calculus term
-      exSTLCPretty :: !Text,
+      exSTLC2TermPretty :: !Text,
+      -- | Pretty-printed example simply-typed lambda calculus term with type signatures
+      exSTLC2TermPrettyWithSig :: !Text,
       -- | Reduced example simply-typed lambda calculus term
-      exReducedSTLC :: !ST.Term,
+      exReducedSTLC2Term :: !STLC2.Term,
       -- | Pretty-printed reduced example simply-typed lambda calculus term
-      exReducedSTLCPretty :: !Text
-      -- | Reduced example combinatory logic term
+      exReducedSTLC2TermPretty :: !Text,
+      -- | Pretty-printed reduced example simply-typed lambda calculus term with type signatures
+      exReducedSTLC2TermPrettyWithSig :: !Text
     } ->
     Example
   deriving stock (Show, Eq)
 
 $(deriveJSON defaultOptions ''Example)
 
--- | Deterministic producer of costs, types, and simply-typed lambda calculus terms.
--- stlc :: forall m. Monad m => Producer (ST.Cost, ST.Type, ST.Term) m ()
--- stlc = each (ST.evalSearchS ST.gen) >-> P.map (\(Sum cost, (ty, tm)) -> (cost, ty, tm))
-
 -- | Nondeterministic producer of types and simply-typed lambda calculus terms.
-sampleStlc :: forall m. Monad m => Seed.Seed -> Producer (ST.Type, ST.Term) m ()
+sampleStlc :: forall m. Monad m => Seed.Seed -> P.Producer (STLC2.Type, STLC2.Term) m ()
 sampleStlc =
-  evalStateT . distribute . repeatM . sample $ do
-    ty <- genTy
-    tm <- genWellTypedExp ty
-    pure (ty, tm)
-  where
-    sample :: forall a. Gen a -> StateT Seed.Seed m a
-    sample gen =
-      let go = do
-            seed <- get
-            let (seed', seed'') = Seed.split seed
-            put seed''
-            case evalGen 30 seed' gen of
-              Nothing ->
-                go
-              Just x ->
-                pure $ Tree.treeValue x
-       in go
+  evalStateT . P.distribute . P.repeatM . STLC2.Sample.sample $ do
+    stlc2Type <- STLC2.Sample.genTy
+    stlc2Term <- Gen.generalize $ STLC2.Sample.genWellTypedExp stlc2Type
+    pure (stlc2Type, stlc2Term)
 
 -- | Pipe from the STLC terms to the 'Example' data type.
 -- The input is a triple of maybe a cost, a type, and an STLC term, and the output is an
 -- 'Example'.
-toExample :: forall m. Monad m => Pipe (Maybe ST.Cost, ST.Type, ST.Term) Example m ()
-toExample = P.for cat $
-  \(exCost, exTy, exSTLC) ->
-    let exTyPretty = Text.pack . show $ exTy
-        exSTLCPretty = Text.pack . show $ exSTLC
-        exReducedSTLC = ST.eval' exSTLC
-        exReducedSTLCPretty = Text.pack . show $ exReducedSTLC
+toExample :: forall m. Monad m => P.Pipe (STLC2.Type, STLC2.Term) Example m ()
+toExample = P.for P.cat $
+  \(exSTLC2Type, exSTLC2Term) ->
+    let exSTLC2TypePretty = Text.pack . STLC2.pprintType $ exSTLC2Type
+        exSTLC2TermPretty = Text.pack . STLC2.pprintTerm $ exSTLC2Term
+        exSTLC2TermPrettyWithSig = Text.pack . STLC2.pprintTermWithSig $ exSTLC2Term
+        exReducedSTLC2Term = STLC2.eval' exSTLC2Term
+        exReducedSTLC2TermPretty = Text.pack . STLC2.pprintTerm $ exReducedSTLC2Term
+        exReducedSTLC2TermPrettyWithSig = Text.pack . STLC2.pprintTermWithSig $ exReducedSTLC2Term
      in P.yield Example {..}
 
+-- | Deduplicate the examples.
+deduplicate :: forall m r a. (Monad m, Eq a, Hashable a) => (Example -> a) -> P.Pipe Example Example m r
+deduplicate f = P.evalStateP HashSet.empty . P.for P.cat $ \ex -> do
+  cache <- get
+  let a = f ex
+  if not (HashSet.member a cache)
+    then do
+      P.yield ex
+      modify (HashSet.insert a)
+    else pure ()
+
 -- | Write a JSON Lines text file with the examples.
---
--- Every example is written as a JSON object in a single line, with the following fields:
--- - cost
--- - type
--- - pretty-printed type
--- - simply-typed lambda calculus term
--- - pretty-printed simply-typed lambda calculus term
--- - combinatory logic term
--- - pretty-printed combinatory logic term
--- - reduced simply-typed lambda calculus term
--- - pretty-printed reduced simply-typed lambda calculus term
--- - reduced combinatory logic term
--- - pretty-printed reduced combinatory logic term
-writeJsonLines :: forall m a. (MonadSafe m, ToJSON a) => FilePath -> Consumer a m ()
-writeJsonLines file = withFile file IO.WriteMode $ \h ->
-  P.map (toStrict . flip snoc 0x0a . encodingToLazyByteString . toEncoding) >-> P.toHandle h
+writeJsonLines :: forall m a. (P.MonadSafe m, ToJSON a) => FilePath -> P.Consumer a m ()
+writeJsonLines file = P.withFile file IO.WriteMode $ \h ->
+  P.map (toStrict . flip snoc 0x0a . encodingToLazyByteString . toEncoding)
+    >-> P.for P.cat (\bs -> liftIO $ BS.hPut h bs >> IO.hFlush h)

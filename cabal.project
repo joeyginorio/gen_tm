@@ -6,4 +6,4 @@ tests: true
 documentation: true
 library-profiling: true
 executable-profiling: true
-benchmarking: true
+benchmarks: true
