@@ -202,7 +202,10 @@ toTHExp' withSig (TmFun x ty tm) =
   let varP False name = TH.VarP name
       varP True name = TH.SigP (TH.VarP name) (toTHType ty)
   in TH.LamE [varP withSig $ TH.mkName $ Text.unpack x] $ toTHExp' withSig tm
-toTHExp' withSig (TmIf tm1 tm2 tm3) = TH.CondE (toTHExp' withSig tm1) (toTHExp' withSig tm2) (toTHExp' withSig tm3)
+-- if-then-else in Haskell needs to be nested due to conflicts with do notation and that leads to additional whitespace
+-- toTHExp' withSig (TmIf tm1 tm2 tm3) = TH.CondE (toTHExp' withSig tm1) (toTHExp' withSig tm2) (toTHExp' withSig tm3)
+-- instead we use if-then-else as a function, ite
+toTHExp' withSig (TmIf tm1 tm2 tm3) = TH.AppE (TH.AppE (TH.AppE (TH.VarE $ TH.mkName "ite") (toTHExp' withSig tm1)) (toTHExp' withSig tm2)) (toTHExp' withSig tm3)
 toTHExp' withSig (TmApp tm1 tm2) = TH.AppE (toTHExp' withSig tm1) (toTHExp' withSig tm2)
 
 -- | Convert a type to a Template Haskell type
@@ -217,7 +220,7 @@ toTHType (TyFun ty ty') = TH.AppT (TH.AppT TH.ArrowT (toTHType ty)) (toTHType ty
 -- "(\\x -> x) ((\\y -> y) ((\\z -> z) True))"
 --
 -- >>> pprintTerm $ TmIf (TmApp (TmFun "x" TyBool TmTrue) TmFalse) (TmFun "y" TyBool TmTrue) (TmFun "z" TyBool (TmVar "z"))
--- "if (\\x -> True) False then \\y -> True else \\z -> z"
+-- "ite ((\\x -> True) False) (\\y -> True) (\\z -> z)"
 pprintTerm :: Term -> String
 pprintTerm = TH.pprint . toTHExp
 
@@ -227,7 +230,7 @@ pprintTerm = TH.pprint . toTHExp
 -- "(\\(x :: Bool) -> x) ((\\(y :: Bool) -> y) ((\\(z :: Bool) -> z) True))"
 --
 -- >>> pprintTermWithSig $ TmIf (TmApp (TmFun "x" TyBool TmTrue) TmFalse) (TmFun "y" TyBool TmTrue) (TmFun "z" TyBool (TmVar "z"))
--- "if (\\(x :: Bool) -> True) False\n then \\(y :: Bool) -> True\n else \\(z :: Bool) -> z"
+-- "ite ((\\(x :: Bool) -> True) False) (\\(y :: Bool) -> True) (\\(z :: Bool) -> z)"
 pprintTermWithSig :: Term -> String
 pprintTermWithSig = TH.pprint . toTHExpWithSig
 

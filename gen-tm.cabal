@@ -60,6 +60,7 @@ library
 executable gen-tm
   main-is:          Main.hs
   other-modules:    Dataset
+                  , Opts
                   , Paths_gen_tm
   autogen-modules:  Paths_gen_tm
   hs-source-dirs:   exe
