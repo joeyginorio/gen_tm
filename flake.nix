@@ -88,16 +88,6 @@
                   {
                     packages.gen-tm.enableExecutableProfiling = true;
                     enableLibraryProfiling = true;
-
-                    # packages.gen-tm.components.exes.gen-tm.configureFlags =
-                    #   lib.optionals final.stdenv.hostPlatform.isMusl [
-                    #     "--disable-executable-dynamic"
-                    #     "--disable-shared"
-                    #     "--ghc-option=-optl=-pthread"
-                    #     "--ghc-option=-optl=-static"
-                    #     "--ghc-option=-optl=-L${final.gmp6.override { withStatic = true; }}/lib"
-                    #     "--ghc-option=-optl=-L${final.zlib.override { static = true; }}/lib"
-                    #   ];
                   }
 
                   (lib.optionalAttrs final.stdenv.hostPlatform.isMusl (let
