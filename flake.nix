@@ -69,32 +69,50 @@
         })
 
         (final: prev: {
-          gen-tm-project = final.haskell-nix.project' {
+          gen-tm-project = 
+            let
+              src = final.haskell-nix.haskellLib.cleanGit {
+                name = "gen-tm";
+                src = ./.;
+              };
+              compiler-nix-name = "ghc8105";
+              projectPackages = lib.attrNames (final.haskell-nix.haskellLib.selectProjectPackages
+                (final.haskell-nix.cabalProject' {
+                  inherit src compiler-nix-name;
+                }).hsPkgs);
+            in
+              final.haskell-nix.cabalProject' {
+                inherit src compiler-nix-name;
 
-            src = final.haskell-nix.haskellLib.cleanGit {
-              name = "gen-tm";
-              src = ./.;
-            };
+                modules = [
+                  {
+                    packages.gen-tm.enableExecutableProfiling = true;
+                    enableLibraryProfiling = true;
 
-            compiler-nix-name = "ghc8105";
+                    # packages.gen-tm.components.exes.gen-tm.configureFlags =
+                    #   lib.optionals final.stdenv.hostPlatform.isMusl [
+                    #     "--disable-executable-dynamic"
+                    #     "--disable-shared"
+                    #     "--ghc-option=-optl=-pthread"
+                    #     "--ghc-option=-optl=-static"
+                    #     "--ghc-option=-optl=-L${final.gmp6.override { withStatic = true; }}/lib"
+                    #     "--ghc-option=-optl=-L${final.zlib.override { static = true; }}/lib"
+                    #   ];
+                  }
 
-            modules = [
-              {
-                packages.gen-tm.enableExecutableProfiling = true;
-                enableLibraryProfiling = true;
-
-                packages.gen-tm.components.exes.gen-tm.configureFlags =
-                  lib.optionals final.stdenv.hostPlatform.isMusl [
-                    "--disable-executable-dynamic"
-                    "--disable-shared"
-                    "--ghc-option=-optl=-pthread"
-                    "--ghc-option=-optl=-static"
-                    "--ghc-option=-optl=-L${final.gmp6.override { withStatic = true; }}/lib"
-                    "--ghc-option=-optl=-L${final.zlib.override { static = true; }}/lib"
-                  ];
-              }
-            ];
-          };
+                  (lib.optionalAttrs final.stdenv.hostPlatform.isMusl (let
+                    fullyStaticOptions = {
+                      enableShared = false;
+                      enableStatic = true;
+                    };
+                  in
+                    {
+                      packages = lib.genAttrs projectPackages (name: fullyStaticOptions);
+                      doHaddock = false;
+                    }
+                  ))
+                ];
+              };
         })
       ];
     
