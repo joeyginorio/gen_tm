@@ -39,12 +39,18 @@ data Example where
       exSTLC2TypePretty :: !Text,
       -- | Example simply-typed lambda calculus term
       exSTLC2Term :: !STLC2.Term,
+      -- | Term statistics
+      exSTLC2TermStats :: !(STLC2.TermStats Integer),
       -- | Pretty-printed example simply-typed lambda calculus term
       exSTLC2TermPretty :: !Text,
       -- | Pretty-printed example simply-typed lambda calculus term with type signatures
       exSTLC2TermPrettyWithSig :: !Text,
+      -- | Evaluation statistics
+      exSTLC2EvalStats :: !(STLC2.EvalStats Integer),
       -- | Reduced example simply-typed lambda calculus term
       exReducedSTLC2Term :: !STLC2.Term,
+      -- | Reduced term statistics
+      exReducedSTLC2TermStats :: !(STLC2.TermStats Integer),
       -- | Pretty-printed reduced example simply-typed lambda calculus term
       exReducedSTLC2TermPretty :: !Text,
       -- | Pretty-printed reduced example simply-typed lambda calculus term with type signatures
@@ -69,10 +75,12 @@ sampleStlc =
 toExample :: forall m. Monad m => P.Pipe (STLC2.Type, STLC2.Term) Example m ()
 toExample = P.for P.cat $
   \(exSTLC2Type, exSTLC2Term) ->
-    let exSTLC2TypePretty = Text.pack . STLC2.pprintType $ exSTLC2Type
+    let exSTLC2TermStats = STLC2.countConstructors exSTLC2Term
+        exSTLC2TypePretty = Text.pack . STLC2.pprintType $ exSTLC2Type
         exSTLC2TermPretty = Text.pack . STLC2.pprintTerm $ exSTLC2Term
         exSTLC2TermPrettyWithSig = Text.pack . STLC2.pprintTermWithSig $ exSTLC2Term
-        exReducedSTLC2Term = STLC2.eval' exSTLC2Term
+        (exReducedSTLC2Term, exSTLC2EvalStats) = STLC2.evalWR exSTLC2Term
+        exReducedSTLC2TermStats = STLC2.countConstructors exReducedSTLC2Term
         exReducedSTLC2TermPretty = Text.pack . STLC2.pprintTerm $ exReducedSTLC2Term
         exReducedSTLC2TermPrettyWithSig = Text.pack . STLC2.pprintTermWithSig $ exReducedSTLC2Term
      in P.yield Example {..}

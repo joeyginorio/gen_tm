@@ -1,5 +1,8 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 {- STLC.hs
    =======
@@ -7,13 +10,14 @@
 
 module Language.STLC2 where
 
-import Data.Set (Set, empty, delete, insert, union, member)
+import Control.Lens (makeLenses, scribe, over, _2)
 import Control.Monad.Trans
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Writer.Lazy
 import Data.Aeson.TH (defaultOptions, deriveJSON)
-import Data.Text (Text)
 import Data.Monoid
+import Data.Set (Set, delete, empty, insert, member, union)
+import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Language.Haskell.TH as TH
 
@@ -30,13 +34,13 @@ data Term = TmUnit                          -- ^ Unit              {Intro.}
           | TmFun  Id Type Term             -- ^ Functions
           | TmIf   Term Term Term           -- ^ If statements     {Elim.}
           | TmApp  Term Term                -- ^ Application
-          deriving (Show, Eq)
+          deriving stock (Show, Eq, Ord)
 
 -- | Lambda types
 data Type = TyUnit                          -- ^ Unit
           | TyBool                          -- ^ Booleans
           | TyFun  Type Type                -- ^ Functions
-          deriving (Show, Eq, Ord)
+          deriving stock (Show, Eq, Ord)
 
 -- | Binding,
 -- e.g., @x :: Bool => (x,Bool)@
@@ -67,11 +71,10 @@ type TcType = ReaderT Context (Either Error) Type
 
 -- | Typecheck terms
 tyCheck :: Term -> TcType
-tyCheck (TmUnit)           = return TyUnit
-tyCheck (TmTrue)           = return TyBool
-tyCheck (TmFalse)          = return TyBool
-tyCheck (TmVar x)          = do ty  <- find x
-                                return ty
+tyCheck TmUnit             = return TyUnit
+tyCheck TmTrue             = return TyBool
+tyCheck TmFalse            = return TyBool
+tyCheck (TmVar x)          = find x
 tyCheck (TmFun x ty1 tm)   = do ty2 <- local ((x,ty1):) $ tyCheck tm
                                 return $ TyFun ty1 ty2
 tyCheck (TmIf tm1 tm2 tm3) = do ty1 <- tyCheck tm1
@@ -110,45 +113,62 @@ ids = (\n -> Text.pack $ '#' : show n) <$> [0 :: Integer ..]
 
 -- | Fresh variables in a term
 fvs :: Term -> Set Id
-fvs (TmUnit)           = empty
-fvs (TmTrue)           = empty
-fvs (TmFalse)          = empty
+fvs TmUnit             = empty
+fvs TmTrue             = empty
+fvs TmFalse            = empty
 fvs (TmVar x)          = insert x empty
 fvs (TmFun x _ tm)     = delete x $ fvs tm
-fvs (TmIf tm1 tm2 tm3) = union (fvs tm1) $ union (fvs tm2) (fvs tm3)
-fvs (TmApp tm1 tm2)    = union (fvs tm1) (fvs tm2)
+fvs (TmIf tm1 tm2 tm3) = fvs tm1 `union` fvs tm2 `union` fvs tm3
+fvs (TmApp tm1 tm2)    = fvs tm1 `union` fvs tm2
 
 -- | alpha conversion of terms (renaming of variables).
 --
 -- @aconv x y tm@ means change all @x@ to @y@ in @tm@
 aconv :: Id -> Id -> Term -> Term
-aconv x y (TmUnit)         = TmUnit
-aconv x y (TmTrue)         = TmTrue
-aconv x y (TmFalse)        = TmFalse
-aconv x y (TmVar z)        | x == z    = TmVar y
-                           | otherwise = TmVar z
-aconv x y (TmFun z ty tm)  | x == z    = TmFun y ty (aconv x y tm)
-                           | otherwise = TmFun z ty (aconv x y tm)
-aconv x y (TmApp tm1 tm2)  = TmApp (aconv x y tm1) (aconv x y tm2)
+aconv _ _ TmUnit             = TmUnit
+aconv _ _ TmTrue             = TmTrue
+aconv _ _ TmFalse            = TmFalse
+aconv x y (TmVar z)          | x == z    = TmVar y
+                             | otherwise = TmVar z
+aconv x y (TmFun z ty tm)    | x == z    = TmFun y ty (aconv x y tm)
+                             | otherwise = TmFun z ty (aconv x y tm)
+aconv x y (TmApp tm1 tm2)    = TmApp (aconv x y tm1) (aconv x y tm2)
+aconv x y (TmIf tm1 tm2 tm3) = TmIf (aconv x y tm1) (aconv x y tm2) (aconv x y tm3)
+
+data EvalStats a = EvalStats
+  { _evalStatsNumSteps :: a,
+    _evalStatsNumStepsAppFun :: a,
+    _evalStatsNumStepsIfTrueFalse :: a
+  }
+  deriving stock (Show, Eq, Ord, Functor)
+
+instance Semigroup a => Semigroup (EvalStats a) where
+  EvalStats a b c <> EvalStats a' b' c' = EvalStats (a <> a') (b <> b') (c <> c')
+
+instance Monoid a => Monoid (EvalStats a) where
+  mempty = EvalStats mempty mempty mempty
+
+makeLenses ''EvalStats
+$(deriveJSON defaultOptions ''EvalStats)
 
 -- | Writer/reader term.
 --
 -- 'Reader' monad carries around fresh identifiers
 -- 'Writer' monad tracks steps of computation
-type WRTerm = WriterT (Sum Integer) (Reader [Id]) Term
+type WRTerm = WriterT (EvalStats (Sum Integer)) (Reader [Id]) Term
 
 -- | Capture-avoiding substitution.
 --
 -- @s[x/t]@ means a term @s@ where all @x@ are replaced with @t@
 subst :: Id -> Term -> Term -> WRTerm
-subst x t (TmUnit)           = return TmUnit
-subst x t (TmTrue)           = return TmTrue
-subst x t (TmFalse)          = return TmFalse
+subst _ _ TmUnit             = return TmUnit
+subst _ _ TmTrue             = return TmTrue
+subst _ _ TmFalse            = return TmFalse
 subst x t (TmVar y)          | x == y    = return t
                              | otherwise = return $ TmVar y
 subst x t s@(TmFun y ty tm)  | x == y           = return $ TmFun y ty tm
-                             | member y (fvs t) = do ids <- lift $ ask
-                                                     let z  = head ids
+                             | member y (fvs t) = do ids' <- lift ask
+                                                     let z  = head ids'
                                                      let s' = aconv y z s
                                                      tm' <- lift $ local tail (runWriterT $ subst x t s')
                                                      return $ fst tm'
@@ -164,26 +184,68 @@ subst x t (TmApp tm1 tm2)    = do tm1' <- subst x t tm1
 
 -- | The actual interpreter, using call-by-name evaluation order
 eval :: Term -> WRTerm
-eval (TmIf TmTrue tm2 _)         = tell (Sum 1) >> eval tm2
-eval (TmIf TmFalse _ tm3)        = tell (Sum 1) >> eval tm3
-eval (TmIf tm1 tm2 tm3)          = do tell $ Sum 1
+eval (TmIf TmTrue tm2 _)         = do scribe evalStatsNumSteps (Sum 1)
+                                      scribe evalStatsNumStepsIfTrueFalse (Sum 1)
+                                      eval tm2
+eval (TmIf TmFalse _ tm3)        = do scribe evalStatsNumSteps (Sum 1)
+                                      scribe evalStatsNumStepsIfTrueFalse (Sum 1)
+                                      eval tm3
+eval (TmIf tm1 tm2 tm3)          = do scribe evalStatsNumSteps (Sum 1)
                                       tm1' <- eval tm1
                                       eval $ TmIf tm1' tm2 tm3
-eval (TmApp (TmFun x _ tm1) tm2) = do tell $ Sum 1
+eval (TmApp (TmFun x _ tm1) tm2) = do scribe evalStatsNumSteps (Sum 1)
+                                      scribe evalStatsNumStepsAppFun (Sum 1)
                                       tm <- subst x tm2 tm1
                                       eval tm
-eval (TmApp tm1 tm2)             = do tell $ Sum 1
+eval (TmApp tm1 tm2)             = do scribe evalStatsNumSteps (Sum 1)
                                       tm1' <- eval tm1
                                       eval $ TmApp tm1' tm2
 eval tm = return tm
 
 -- | Runs eval with a default list of fresh variable names
-evalWR :: Term -> (Term, Sum Integer)
-evalWR = flip runReader ids . runWriterT . eval
+evalWR :: Term -> (Term, EvalStats Integer)
+evalWR = over _2 (fmap getSum) . flip runReader ids . runWriterT . eval
 
 -- | Ignores writer output to just give output term
 eval' :: Term -> Term
 eval' = fst . evalWR
+
+data TermStats a = TermStats
+  { _termStatsNumUnit :: a,
+    _termStatsNumTrue :: a,
+    _termStatsNumFalse :: a,
+    _termStatsNumFun :: a,
+    _termStatsNumApp :: a,
+    _termStatsNumIf :: a,
+    _termStatsNumVar :: a
+  }
+  deriving stock (Show, Eq, Ord, Functor)
+
+instance Semigroup a => Semigroup (TermStats a) where
+  TermStats a b c d e f g <> TermStats a' b' c' d' e' f' g' = TermStats (a <> a') (b <> b') (c <> c') (d <> d') (e <> e') (f <> f') (g <> g')
+
+instance Monoid a => Monoid (TermStats a) where
+  mempty = TermStats mempty mempty mempty mempty mempty mempty mempty
+
+makeLenses ''TermStats
+$(deriveJSON defaultOptions ''TermStats)
+
+countConstructors :: Term -> TermStats Integer
+countConstructors = fmap getSum . execWriter . go
+  where 
+    go TmUnit = scribe termStatsNumUnit (Sum 1)
+    go TmTrue = scribe termStatsNumTrue (Sum 1)
+    go TmFalse = scribe termStatsNumFalse (Sum 1)
+    go (TmFun _ _ tm) = do scribe termStatsNumFun (Sum 1)
+                           go tm
+    go (TmApp tm1 tm2) = do scribe termStatsNumApp (Sum 1)
+                            go tm1
+                            go tm2
+    go (TmIf tm1 tm2 tm3) = do scribe termStatsNumIf (Sum 1)
+                               go tm1
+                               go tm2
+                               go tm3
+    go (TmVar _) = scribe termStatsNumVar (Sum 1)
 
 -- | Convert a term to a Template Haskell expression
 toTHExp :: Term -> TH.Exp
