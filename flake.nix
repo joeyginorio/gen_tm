@@ -94,6 +94,8 @@
                     fullyStaticOptions = {
                       enableShared = false;
                       enableStatic = true;
+                      dontPatchElf = false;
+                      dontStrip = false;
                     };
                   in
                     {
