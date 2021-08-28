@@ -69,7 +69,7 @@
         })
 
         (final: prev: {
-          gen-tm-project = 
+          gen-tm-project =
             let
               src = final.haskell-nix.haskellLib.cleanGit {
                 name = "gen-tm";
@@ -105,7 +105,7 @@
               };
         })
       ];
-    
+
     in eachSystem supportedSystems (system:
       let
         pkgs = import nixpkgs { inherit system overlays; };
@@ -118,7 +118,7 @@
 
         flake = pkgs.gen-tm-project.flake {};
 
-        staticFlake = pkgs.pkgsStatic.gen-tm-project.flake {};
+        staticFlake = pkgs.pkgsCross.musl64.gen-tm-project.flake {};
 
         exes = collectExes flake.packages;
         exeNames = attrNames exes;
