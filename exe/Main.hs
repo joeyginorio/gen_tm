@@ -36,10 +36,10 @@ main = generateAndExport =<< Opts.execParser Opts.opts
 generateAndExport :: Opts.Config -> IO ()
 generateAndExport config@Opts.Config {..} =
   P.runSafeT $ do
+    saveAsJson (configOutputFolder </> configOutputConfigFileName) config
     hist <-
       P.runEffect . P.execStateP mempty $
-        saveAsJson (configOutputFolder </> configOutputConfigFileName) config
-          >> Dataset.sampleStlc configSeed
+        Dataset.sampleStlc configSeed
           >-> Dataset.toExample
           >-> Dataset.deduplicate (^. Dataset.exSTLC2TermPretty)
           >-> P.take configNumberOfExampes
