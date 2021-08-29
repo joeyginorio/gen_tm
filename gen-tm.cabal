@@ -69,9 +69,12 @@ executable gen-tm
                   , ansi-terminal
                   , base
                   , bytestring >= 0.10.12.0
+                  , containers
+                  , filepath
                   , gen-tm
                   , hashable
                   , hedgehog
+                  , lens
                   , mtl
                   , optparse-applicative
                   , pipes

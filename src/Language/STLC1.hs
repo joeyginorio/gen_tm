@@ -10,13 +10,16 @@
 
 module Language.STLC1 where
 
-import Control.Lens (makeLenses, scribe, over, _2)
-import Control.Monad.Trans
-import Control.Monad.Trans.Reader
-import Control.Monad.Trans.Writer.Lazy
-import Data.Aeson.TH (defaultOptions, deriveJSON)
-import Data.Monoid
-import Data.Set (Set, delete, empty, insert, member, union)
+import Control.Lens (makeLenses, over, scribe, (^.), _2)
+import Control.Monad.Trans (MonadTrans (lift))
+import Control.Monad.Trans.Reader (Reader, ReaderT, ask, local, runReader)
+import Control.Monad.Trans.Writer.Lazy (WriterT (runWriterT), execWriter)
+import Data.Aeson.TH (defaultOptions, deriveJSON, Options (fieldLabelModifier))
+import Data.IntMap.Strict (IntMap)
+import qualified Data.IntMap.Strict as IntMap
+import Data.Monoid (Sum (..))
+import Data.Set (Set)
+import qualified Data.Set as Set
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Language.Haskell.TH as TH
@@ -95,10 +98,10 @@ ids = (\n -> Text.pack $ 'x' : show n) <$> [0 :: Integer ..]
 
 -- | Fresh variables in a term
 fvs :: Term -> Set Id
-fvs TmUnit             = empty
-fvs (TmVar x)          = insert x empty
-fvs (TmFun x _ tm)     = delete x $ fvs tm
-fvs (TmApp tm1 tm2)    = fvs tm1 `union` fvs tm2
+fvs TmUnit             = Set.empty
+fvs (TmVar x)          = Set.insert x Set.empty
+fvs (TmFun x _ tm)     = Set.delete x $ fvs tm
+fvs (TmApp tm1 tm2)    = fvs tm1 `Set.union` fvs tm2
 
 -- | alpha conversion of terms (renaming of variables).
 --
@@ -124,13 +127,13 @@ instance Monoid a => Monoid (EvalStats a) where
   mempty = EvalStats mempty mempty
 
 makeLenses ''EvalStats
-$(deriveJSON defaultOptions ''EvalStats)
+$(deriveJSON defaultOptions {fieldLabelModifier = drop 10} ''EvalStats)
 
 -- | Writer/reader term.
 --
 -- 'Reader' monad carries around fresh identifiers
 -- 'Writer' monad tracks steps of computation
-type WRTerm = WriterT (EvalStats (Sum Integer)) (Reader [Id]) Term
+type WRTerm = WriterT (EvalStats (Sum Int)) (Reader [Id]) Term
 
 -- | Capture-avoiding substitution.
 --
@@ -140,11 +143,11 @@ subst _ _ TmUnit             = return TmUnit
 subst x t (TmVar y)          | x == y    = return t
                              | otherwise = return $ TmVar y
 subst x t s@(TmFun y ty tm)  | x == y           = return $ TmFun y ty tm
-                             | member y (fvs t) = do ids' <- lift ask
-                                                     let z  = head ids'
-                                                     let s' = aconv y z s
-                                                     tm' <- lift $ local tail (runWriterT $ subst x t s')
-                                                     return $ fst tm'
+                             | Set.member y (fvs t) = do ids' <- lift ask
+                                                         let z  = head ids'
+                                                         let s' = aconv y z s
+                                                         tm' <- lift $ local tail (runWriterT $ subst x t s')
+                                                         return $ fst tm'
                              | otherwise        = do tm' <- subst x t tm
                                                      return $ TmFun y ty tm'
 subst x t (TmApp tm1 tm2)    = do tm1' <- subst x t tm1
@@ -163,7 +166,7 @@ eval (TmApp tm1 tm2)             = do scribe evalStatsNumSteps (Sum 1)
 eval tm = return tm
 
 -- | Runs eval with a default list of fresh variable names
-evalWR :: Term -> (Term, EvalStats Integer)
+evalWR :: Term -> (Term, EvalStats Int)
 evalWR = over _2 (fmap getSum) . flip runReader ids . runWriterT . eval
 
 -- | Ignores writer output to just give output term
@@ -185,9 +188,9 @@ instance Monoid a => Monoid (TermStats a) where
   mempty = TermStats mempty mempty mempty mempty
 
 makeLenses ''TermStats
-$(deriveJSON defaultOptions ''TermStats)
+$(deriveJSON defaultOptions {fieldLabelModifier = drop 10} ''TermStats)
 
-countConstructors :: Term -> TermStats Integer
+countConstructors :: Term -> TermStats Int
 countConstructors = fmap getSum . execWriter . go
   where 
     go TmUnit = scribe termStatsNumUnit (Sum 1)
@@ -197,6 +200,13 @@ countConstructors = fmap getSum . execWriter . go
                             go tm1
                             go tm2
     go (TmVar _) = scribe termStatsNumVar (Sum 1)
+
+updateHistogram :: TermStats Int -> TermStats (IntMap Int) -> TermStats (IntMap Int)
+updateHistogram stats =
+  over termStatsNumUnit (IntMap.insertWith (+) (stats ^. termStatsNumUnit) 1)
+    . over termStatsNumFun (IntMap.insertWith (+) (stats ^. termStatsNumFun) 1)
+    . over termStatsNumApp (IntMap.insertWith (+) (stats ^. termStatsNumApp) 1)
+    . over termStatsNumVar (IntMap.insertWith (+) (stats ^. termStatsNumVar) 1)
 
 -- | Convert a term to a Template Haskell expression
 toTHExp :: Term -> TH.Exp
