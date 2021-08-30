@@ -46,7 +46,8 @@ generateAndExport config@Opts.Config {..} =
           >-> P.tee (showProgress configNumberOfExampes)
           >-> P.tee (Dataset.writeJsonLines (configOutputFolder </> configOutputDataFileName))
           >-> Dataset.histogram
-    saveAsJson (configOutputFolder </> configOutputHistogramFileName) hist
+    let hist' = fmap Dataset.toRecords hist
+    saveAsJson (configOutputFolder </> configOutputHistogramFileName) hist'
 
 saveAsJson :: forall m a. (P.MonadSafe m, ToJSON a) => FilePath -> a -> m ()
 saveAsJson file a = P.withFile file IO.WriteMode $ \h ->

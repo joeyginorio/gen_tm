@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
@@ -12,7 +13,7 @@ module Dataset where
 import Control.Lens (Zoom, Zoomed, makeLenses, zoom, (^.))
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.State (MonadState (get), evalStateT, modify)
-import Data.Aeson (ToJSON (toEncoding), Options (fieldLabelModifier))
+import Data.Aeson (Options (fieldLabelModifier), ToJSON (toEncoding))
 import Data.Aeson.Encoding (encodingToLazyByteString)
 import Data.Aeson.TH (defaultOptions, deriveJSON)
 import qualified Data.ByteString as BS
@@ -20,6 +21,7 @@ import Data.ByteString.Lazy (snoc, toStrict)
 import qualified Data.HashSet as HashSet
 import Data.Hashable (Hashable)
 import Data.IntMap.Strict (IntMap)
+import qualified Data.IntMap.Strict as IntMap
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Hedgehog.Internal.Gen as Gen
@@ -101,17 +103,17 @@ deduplicate f = P.evalStateP HashSet.empty . P.for P.cat $ \ex -> do
       modify (HashSet.insert a)
     else pure ()
 
-data Histogram = Histogram
-  { _histSTLC2TermStats :: !(STLC2.TermStats (IntMap Int)),
-    _histSTLC2EvalStats :: !(STLC2.EvalStats (IntMap Int)),
-    _histReducedSTLC2TermStats :: !(STLC2.TermStats (IntMap Int))
+data Histogram a = Histogram
+  { _histSTLC2TermStats :: !(STLC2.TermStats a),
+    _histSTLC2EvalStats :: !(STLC2.EvalStats a),
+    _histReducedSTLC2TermStats :: !(STLC2.TermStats a)
   }
-  deriving stock (Show, Eq)
+  deriving stock (Show, Eq, Ord, Functor)
 
-instance Semigroup Histogram where
+instance Semigroup a => Semigroup (Histogram a) where
   Histogram a b c <> Histogram a' b' c' = Histogram (a <> a') (b <> b') (c <> c')
 
-instance Monoid Histogram where
+instance Monoid a => Monoid (Histogram a) where
   mempty = Histogram mempty mempty mempty
 
 makeLenses ''Histogram
@@ -119,9 +121,9 @@ $(deriveJSON defaultOptions {fieldLabelModifier = drop 5} ''Histogram)
 
 histogram ::
   forall m m' m'' r.
-  ( Zoom m' m (STLC2.EvalStats (IntMap Int)) Histogram,
+  ( Zoom m' m (STLC2.EvalStats (IntMap Int)) (Histogram (IntMap Int)),
     Functor (Zoomed m' ()),
-    Zoom m'' m (STLC2.TermStats (IntMap Int)) Histogram,
+    Zoom m'' m (STLC2.TermStats (IntMap Int)) (Histogram (IntMap Int)),
     Functor (Zoomed m'' ())
   ) =>
   P.Consumer Example m r
@@ -130,6 +132,15 @@ histogram =
     zoom histSTLC2TermStats . modify $ STLC2.updateTermHistogram (ex ^. exSTLC2TermStats)
     zoom histSTLC2EvalStats . modify $ STLC2.updateEvalHistogram (ex ^. exSTLC2EvalStats)
     zoom histReducedSTLC2TermStats . modify $ STLC2.updateTermHistogram (ex ^. exReducedSTLC2TermStats)
+
+data HistogramRecord = HistogramRecord {_hrValue :: !Int, _hrCount :: !Int}
+  deriving stock (Show, Eq, Ord)
+
+makeLenses ''HistogramRecord
+$(deriveJSON defaultOptions {fieldLabelModifier = drop 3} ''HistogramRecord)
+
+toRecords :: IntMap Int -> [HistogramRecord]
+toRecords im = uncurry HistogramRecord <$> IntMap.toList im
 
 -- | Write a JSON Lines text file with the examples.
 writeJsonLines :: forall m a r. (P.MonadSafe m, ToJSON a) => FilePath -> P.Consumer a m r
