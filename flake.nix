@@ -24,11 +24,12 @@
     };
   };
 
-  outputs = { self, nixpkgs, haskell-nix, utils, iohkNix, ... }: with utils.lib;
+  outputs = { self, nixpkgs, haskell-nix, utils, iohkNix, ... }:
     let
       inherit (nixpkgs) lib;
-      inherit (lib);
-      inherit (iohkNix.lib) collectExes;
+      inherit (lib) mapAttrs getAttrs attrNames;
+      inherit (utils.lib) eachSystem;
+      inherit (iohkNix.lib) prefixNamesWith collectExes;
 
       supportedSystems = ["x86_64-linux" "x86_64-darwin"];
 
@@ -68,25 +69,44 @@
         })
 
         (final: prev: {
-          gen-tm-project = final.haskell-nix.project' {
+          gen-tm-project =
+            let
+              src = final.haskell-nix.haskellLib.cleanGit {
+                name = "gen-tm";
+                src = ./.;
+              };
+              compiler-nix-name = "ghc8105";
+              projectPackages = lib.attrNames (final.haskell-nix.haskellLib.selectProjectPackages
+                (final.haskell-nix.cabalProject' {
+                  inherit src compiler-nix-name;
+                }).hsPkgs);
+            in
+              final.haskell-nix.cabalProject' {
+                inherit src compiler-nix-name;
 
-            src = final.haskell-nix.haskellLib.cleanGit {
-              name = "gen-tm";
-              src = ./.;
-            };
+                modules = [
+                  {
+                    packages.gen-tm.enableExecutableProfiling = true;
+                    enableLibraryProfiling = true;
+                  }
 
-            compiler-nix-name = "ghc8105";
-
-            modules = [
-              {
-                packages.gen-tm.enableExecutableProfiling = true;
-                enableLibraryProfiling = true;
-              }
-            ];
-          };
+                  (lib.optionalAttrs final.stdenv.hostPlatform.isMusl (let
+                    fullyStaticOptions = {
+                      enableShared = false;
+                      enableStatic = true;
+                      dontStrip = false;
+                    };
+                  in
+                    {
+                      packages = lib.genAttrs projectPackages (name: fullyStaticOptions);
+                      doHaddock = false;
+                    }
+                  ))
+                ];
+              };
         })
       ];
-    
+
     in eachSystem supportedSystems (system:
       let
         pkgs = import nixpkgs { inherit system overlays; };
@@ -99,14 +119,25 @@
 
         flake = pkgs.gen-tm-project.flake {};
 
-        checks = collectChecks flake.packages;
+        staticFlake = pkgs.pkgsCross.musl64.gen-tm-project.flake {};
 
         exes = collectExes flake.packages;
+        exeNames = attrNames exes;
+        lazyCollectExe = p: getAttrs exeNames (collectExes p);
+
+        packages = {
+          inherit (pkgs) gen-tm;
+        }
+        // exes
+        // (prefixNamesWith "static/"
+              (mapAttrs pkgs.rewriteStatic (lazyCollectExe staticFlake.packages)));
 
       in lib.recursiveUpdate flake {
-        inherit environments checks;
+        inherit environments packages;
 
         defaultPackage = flake.packages."gen-tm:exe:gen-tm";
+
+        defaultApp = utils.lib.mkApp { drv = flake.packages."gen-tm:exe:gen-tm"; };
 
         inherit devShell;
       }
