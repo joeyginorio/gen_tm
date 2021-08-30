@@ -10,74 +10,40 @@
 
 module Language.STLC2.ToCL where
 
-import Data.Set (Set, delete, empty, insert, member, union)
-import Data.Text (Text)
+import Data.Set (Set)
+import qualified Data.Set as Set
 import qualified Language.CL as CL
+import qualified Language.LC as LC
 import qualified Language.STLC2 as STLC2
+import qualified Language.STLC2.ToLC as STLC2
 
 {- ====================== Stage 1: Erasure + Desugar ======================== -}
-
--- Here we exploit two properties of the simply typed lambda calculus, that
--- we can "erase" types without impacting run-time behavior of its programs,
--- known as type-erasure. The second property is its basic data (bool, pairs)
--- can be desugared into the pure untyped lambda calculus.
-
-type Id = Text
-
--- | Syntax of lambda calculus
-data Term
-  = TmVar Id
-  | TmFun Id Term
-  | TmApp Term Term
-  deriving (Show)
-
--- | STLC to LC (applying type erasure and desugaring)
-toLC :: STLC2.Term -> Term
-toLC STLC2.TmUnit = TmFun "x" (TmVar "x")
-toLC STLC2.TmTrue = TmFun "x" (TmFun "y" (TmVar "x"))
-toLC STLC2.TmFalse = TmFun "x" (TmFun "y" (TmVar "y"))
-toLC (STLC2.TmVar x) = TmVar x
--- toLC (STLC2.TmProd s t) = TmFun "z" (TmApp (TmApp (TmVar "z") s') t')
---   where
---     s' = toLC s
---     t' = toLC t
-toLC (STLC2.TmFun x _ t) = TmFun x (toLC t)
-toLC (STLC2.TmIf s t u) = TmApp (TmApp (toLC s) (toLC t)) (toLC u)
--- toLC (STLC2.TmFst s) = TmApp s' t
---   where
---     s' = toLC s
---     t = TmFun "x" (TmFun "y" (TmVar "x"))
--- toLC (STLC2.TmSnd s) = TmApp s' t
---   where
---     s' = toLC s
---     t = TmFun "x" (TmFun "y" (TmVar "y"))
-toLC (STLC2.TmApp s t) = TmApp (toLC s) (toLC t)
 
 {- ===================== Stage 2: Lambda elimination ======================== -}
 
 data Term'
   = S'
   | K'
-  | TmVar' Id
-  | TmFun' Id Term'
+  | TmVar' LC.Id
+  | TmFun' LC.Id Term'
   | TmApp' Term' Term'
   deriving (Show)
 
 -- | Translate lambda terms into a mixed representation of lambda / CL terms.
 -- Makes it simpler to implement the term rewriting algorithm for translating
 -- lambda to CL terms.
-toTerm' :: Term -> Term'
-toTerm' (TmVar x) = TmVar' x
-toTerm' (TmFun x t) = TmFun' x (toTerm' t)
-toTerm' (TmApp s t) = TmApp' (toTerm' s) (toTerm' t)
+toTerm' :: LC.Term -> Term'
+toTerm' (LC.TmVar x) = TmVar' x
+toTerm' (LC.TmFun x t) = TmFun' x (toTerm' t)
+toTerm' (LC.TmApp s t) = TmApp' (toTerm' s) (toTerm' t)
 
 -- | Free variables in a term
-fvs :: Term' -> Set Id
-fvs S' = empty
-fvs K' = empty
-fvs (TmVar' x) = insert x empty
-fvs (TmFun' x tm) = delete x $ fvs tm
-fvs (TmApp' tm1 tm2) = fvs tm1 `union` fvs tm2
+fvs :: Term' -> Set LC.Id
+fvs S' = Set.empty
+fvs K' = Set.empty
+fvs (TmVar' x) = Set.insert x Set.empty
+fvs (TmFun' x tm) = Set.delete x $ fvs tm
+fvs (TmApp' tm1 tm2) = fvs tm1 `Set.union` fvs tm2
 
 -- | Convert lambda' terms to cl' terms.
 --
@@ -91,7 +57,7 @@ toCL' (TmVar' x) = TmVar' x
 toCL' (TmApp' s t) = TmApp' (toCL' s) (toCL' t)
 toCL' (TmFun' x (TmVar' y)) | x == y = TmApp' (TmApp' S' K') K'
 toCL' (TmFun' x t)
-  | not $ member x (fvs t) = TmApp' K' (toCL' t)
+  | not $ Set.member x (fvs t) = TmApp' K' (toCL' t)
   | otherwise = case t of
     t'@(TmFun' _ _) -> toCL' (TmFun' x (toCL' t'))
     (TmApp' s' t') -> TmApp' (TmApp' S' s'') t''
@@ -125,4 +91,4 @@ toCL _ = Nothing
 -- >>> compile $ STLC2.TmApp (STLC2.TmFun "x" STLC2.TyBool (STLC2.TmVar "x")) STLC2.TmTrue
 -- Just (App (App (App S K) K) (App (App S (App K K)) (App (App S K) K)))
 compile :: STLC2.Term -> Maybe CL.Term
-compile = toCL . toCL' . toTerm' . toLC
+compile = toCL . toCL' . toTerm' . STLC2.toLC
