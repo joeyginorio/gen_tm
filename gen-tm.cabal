@@ -101,6 +101,7 @@ test-suite spec
   main-is:          Spec.hs
   other-modules:    Language.STLC2Spec
                   , Language.STLC2.ToCLSpec
+                  , Language.STLC2.ToLCSpec
   build-depends:    QuickCheck
                   , base
                   , base

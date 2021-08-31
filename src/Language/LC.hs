@@ -27,7 +27,7 @@ data Term
   = TmVar Id
   | TmFun Id Term
   | TmApp Term Term
-  deriving (Show)
+  deriving stock (Show, Eq, Ord)
 
 ids :: [Id]
 ids = (\n -> Text.pack $ '#' : show n) <$> [0 :: Integer ..]
@@ -157,7 +157,7 @@ toTHExp (TmApp tm1 tm2) = TH.AppE (toTHExp tm1) (toTHExp tm2)
 
 -- | Pretty-print a term using Haskell syntax
 --
--- >>> pprintTerm $ TmApp (TmFun "x" TyUnit (TmVar "x")) TmUnit
--- "(\\x -> x) ()"
+-- >>> pprintTerm $ TmApp (TmFun "x" (TmVar "x")) (TmFun "y" (TmVar "y"))
+-- "(\\x -> x) (\\y -> y)"
 pprintTerm :: Term -> String
 pprintTerm = TH.pprint . toTHExp
