@@ -26,8 +26,10 @@ import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Hedgehog.Internal.Gen as Gen
 import qualified Hedgehog.Internal.Seed as Seed
+import qualified Language.LC as LC
 import qualified Language.STLC2 as STLC2
 import qualified Language.STLC2.Sample as STLC2.Sample
+import qualified Language.STLC2.ToLC as STLC2
 import Pipes ((>->))
 import qualified Pipes as P
 import qualified Pipes.Lift as P
@@ -60,7 +62,21 @@ data Example where
       -- | Pretty-printed reduced example simply-typed lambda calculus term
       _exReducedSTLC2TermPretty :: !Text,
       -- | Pretty-printed reduced example simply-typed lambda calculus term with type signatures
-      _exReducedSTLC2TermPrettyWithSig :: !Text
+      _exReducedSTLC2TermPrettyWithSig :: !Text,
+      -- | Example term converted to untyped lambda calculus
+      _exLCTerm :: !LC.Term,
+      -- | Lambda calculus term statistics
+      _exLCTermStats :: !(LC.TermStats Int),
+      -- | Pretty-printed example lambda calculus term
+      _exLCTermPretty :: !Text,
+      -- | Lambda calculus evaluation statistics
+      _exLCEvalStats :: !(LC.EvalStats Int),
+      -- | Reduced untyped lambda calculus term
+      _exReducedLCTerm :: !LC.Term,
+      -- | Reduced lambda calculus term statistics
+      _exReducedLCTermStats :: !(LC.TermStats Int),
+      -- | Pretty-printed reduced untyped lambda calculus term
+      _exReducedLCTermPretty :: !Text
     } ->
     Example
   deriving stock (Show, Eq)
@@ -90,6 +106,12 @@ toExample = P.for P.cat $
         _exReducedSTLC2TermStats = STLC2.countConstructors _exReducedSTLC2Term
         _exReducedSTLC2TermPretty = Text.pack . STLC2.pprintTerm $ _exReducedSTLC2Term
         _exReducedSTLC2TermPrettyWithSig = Text.pack . STLC2.pprintTermWithSig $ _exReducedSTLC2Term
+        _exLCTerm = STLC2.toLC _exSTLC2Term
+        _exLCTermStats = LC.countConstructors _exLCTerm
+        _exLCTermPretty = Text.pack . LC.pprintTerm $ _exLCTerm
+        (_exReducedLCTerm, _exLCEvalStats) = LC.evalWR _exLCTerm
+        _exReducedLCTermStats = LC.countConstructors _exReducedLCTerm
+        _exReducedLCTermPretty = Text.pack . LC.pprintTerm $ _exReducedLCTerm
      in P.yield Example {..}
 
 -- | Deduplicate the examples.
@@ -106,25 +128,32 @@ deduplicate f = P.evalStateP HashSet.empty . P.for P.cat $ \ex -> do
 data Histogram a = Histogram
   { _histSTLC2TermStats :: !(STLC2.TermStats a),
     _histSTLC2EvalStats :: !(STLC2.EvalStats a),
-    _histReducedSTLC2TermStats :: !(STLC2.TermStats a)
+    _histReducedSTLC2TermStats :: !(STLC2.TermStats a),
+    _histLCTermStats :: !(LC.TermStats a),
+    _histLCEvalStats :: !(LC.EvalStats a),
+    _histReducedLCTermStats :: !(LC.TermStats a)
   }
   deriving stock (Show, Eq, Ord, Functor)
 
 instance Semigroup a => Semigroup (Histogram a) where
-  Histogram a b c <> Histogram a' b' c' = Histogram (a <> a') (b <> b') (c <> c')
+  Histogram a b c d e f <> Histogram a' b' c' d' e' f' = Histogram (a <> a') (b <> b') (c <> c') (d <> d') (e <> e') (f <> f')
 
 instance Monoid a => Monoid (Histogram a) where
-  mempty = Histogram mempty mempty mempty
+  mempty = Histogram mempty mempty mempty mempty mempty mempty
 
 makeLenses ''Histogram
 $(deriveJSON defaultOptions {fieldLabelModifier = drop 5} ''Histogram)
 
 histogram ::
-  forall m m' m'' r.
+  forall m m' m'' m''' m'''' r.
   ( Zoom m' m (STLC2.EvalStats (IntMap Int)) (Histogram (IntMap Int)),
     Functor (Zoomed m' ()),
     Zoom m'' m (STLC2.TermStats (IntMap Int)) (Histogram (IntMap Int)),
-    Functor (Zoomed m'' ())
+    Functor (Zoomed m'' ()),
+    Zoom m''' m (LC.EvalStats (IntMap Int)) (Histogram (IntMap Int)),
+    Functor (Zoomed m''' ()),
+    Zoom m'''' m (LC.TermStats (IntMap Int)) (Histogram (IntMap Int)),
+    Functor (Zoomed m'''' ())
   ) =>
   P.Consumer Example m r
 histogram =
@@ -132,6 +161,9 @@ histogram =
     zoom histSTLC2TermStats . modify $ STLC2.updateTermHistogram (ex ^. exSTLC2TermStats)
     zoom histSTLC2EvalStats . modify $ STLC2.updateEvalHistogram (ex ^. exSTLC2EvalStats)
     zoom histReducedSTLC2TermStats . modify $ STLC2.updateTermHistogram (ex ^. exReducedSTLC2TermStats)
+    zoom histLCTermStats . modify $ LC.updateTermHistogram (ex ^. exLCTermStats)
+    zoom histLCEvalStats . modify $ LC.updateEvalHistogram (ex ^. exLCEvalStats)
+    zoom histReducedLCTermStats . modify $ LC.updateTermHistogram (ex ^. exReducedLCTermStats)
 
 data HistogramRecord = HistogramRecord {_hrValue :: !Int, _hrCount :: !Int}
   deriving stock (Show, Eq, Ord)

@@ -29,6 +29,8 @@ data Term
   | TmApp Term Term
   deriving stock (Show, Eq, Ord)
 
+$(deriveJSON defaultOptions ''Term)
+
 ids :: [Id]
 ids = (\n -> Text.pack $ '#' : show n) <$> [0 :: Integer ..]
 
@@ -115,6 +117,12 @@ evalWR = over _2 (fmap getSum) . flip runReader ids . runWriterT . eval
 eval' :: Term -> Term
 eval' = fst . evalWR
 
+updateEvalHistogram :: EvalStats Int -> EvalStats (IntMap Int) -> EvalStats (IntMap Int)
+updateEvalHistogram stats =
+  over evalStatsNumSteps (IntMap.insertWith (+) (stats ^. evalStatsNumSteps) 1)
+    . over evalStatsNumStepsAppFun (IntMap.insertWith (+) (stats ^. evalStatsNumStepsAppFun) 1)
+
+
 data TermStats a = TermStats
   { _termStatsNumFun :: a,
     _termStatsNumApp :: a,
@@ -143,8 +151,8 @@ countConstructors = fmap getSum . execWriter . go
       go tm2
     go (TmVar _) = scribe termStatsNumVar (Sum 1)
 
-updateHistogram :: TermStats Int -> TermStats (IntMap Int) -> TermStats (IntMap Int)
-updateHistogram stats =
+updateTermHistogram :: TermStats Int -> TermStats (IntMap Int) -> TermStats (IntMap Int)
+updateTermHistogram stats =
   over termStatsNumFun (IntMap.insertWith (+) (stats ^. termStatsNumFun) 1)
     . over termStatsNumApp (IntMap.insertWith (+) (stats ^. termStatsNumApp) 1)
     . over termStatsNumVar (IntMap.insertWith (+) (stats ^. termStatsNumVar) 1)
