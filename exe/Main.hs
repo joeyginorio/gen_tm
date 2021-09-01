@@ -3,10 +3,6 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 
-{- Main.hs
-   =======
-   Provides a CLI for generating and exporting datasets for STLC and CL. -}
-
 module Main where
 
 import Control.Lens ((^.))
@@ -15,9 +11,11 @@ import Data.Aeson (ToJSON (toEncoding))
 import Data.Aeson.Encoding (encodingToLazyByteString)
 import qualified Data.ByteString as BS
 import Data.ByteString.Lazy (toStrict)
+import qualified Data.Either.Validation as Validation
+import Data.Functor.Identity (Identity (..))
+import qualified Data.List as List
 import qualified Data.Text.Lazy as Text.Lazy
 import qualified Dataset
-import qualified Options.Applicative as Opts
 import qualified Opts
 import Pipes ((>->))
 import qualified Pipes as P
@@ -31,23 +29,30 @@ import qualified System.IO as IO
 import qualified System.ProgressBar as PB
 
 main :: IO ()
-main = generateAndExport =<< Opts.execParser Opts.opts
+main = do
+  v <- Opts.config
+  case v of
+    Validation.Failure errorMessageList -> do
+      error $
+        "The following options are required but not provided: "
+          <> List.intercalate ", " errorMessageList
+    Validation.Success x -> generateAndExport x
 
-generateAndExport :: Opts.Config -> IO ()
+generateAndExport :: Opts.Config Identity -> IO ()
 generateAndExport config@Opts.Config {..} =
   P.runSafeT $ do
-    saveAsJson (configOutputFolder </> configOutputConfigFileName) config
+    saveAsJson (runIdentity configOutputFolder </> runIdentity configOutputConfigFileName) config
     hist <-
       P.runEffect . P.execStateP mempty $
-        Dataset.sampleStlc configSeed
+        Dataset.sampleStlc (runIdentity configSeed)
           >-> Dataset.toExample
           >-> Dataset.deduplicate (^. Dataset.exSTLC2TermPretty)
-          >-> P.take configNumberOfExampes
-          >-> P.tee (showProgress configNumberOfExampes)
-          >-> P.tee (Dataset.writeJsonLines (configOutputFolder </> configOutputDataFileName))
+          >-> P.take (runIdentity configNumberOfExampes)
+          >-> P.tee (showProgress $ runIdentity configNumberOfExampes)
+          >-> P.tee (Dataset.writeJsonLines (runIdentity configOutputFolder </> runIdentity configOutputDataFileName))
           >-> Dataset.histogram
     let hist' = fmap Dataset.toRecords hist
-    saveAsJson (configOutputFolder </> configOutputHistogramFileName) hist'
+    saveAsJson (runIdentity configOutputFolder </> runIdentity configOutputHistogramFileName) hist'
 
 saveAsJson :: forall m a. (P.MonadSafe m, ToJSON a) => FilePath -> a -> m ()
 saveAsJson file a = P.withFile file IO.WriteMode $ \h ->

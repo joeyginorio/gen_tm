@@ -69,9 +69,12 @@ executable gen-tm
   hs-source-dirs:   exe
   build-depends:    aeson
                   , ansi-terminal
+                  , attoparsec
+                  , barbies
                   , base
                   , bytestring >= 0.10.12.0
                   , containers
+                  , either
                   , filepath
                   , gen-tm
                   , hashable
