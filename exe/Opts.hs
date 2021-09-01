@@ -12,7 +12,7 @@
 
 module Opts where
 
-import Control.Applicative (Alternative (empty, (<|>)), optional)
+import Control.Applicative (Alternative (empty, (<|>)), optional, (<**>))
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Parser.Internal as Aeson
 import qualified Data.Aeson.TH as Aeson
@@ -136,7 +136,7 @@ parserInfo b =
                   <> Opts.metavar "CONFIG_FILE"
                   <> Opts.help "Input config file name"
             )
-   in Opts.info parser $
+   in Opts.info (parser <**> Opts.helper) $
         Opts.fullDesc
           <> Opts.progDesc "Generate and export datasets for neural interpretation"
           <> Opts.header "gen-tm - a tool for generating and exporting datasets for neural interpretation"
