@@ -170,12 +170,9 @@ validateConfig errorMessages mb =
 
 config :: IO (Validation [String] (Config Identity))
 config = do
+  (c, mConfigFile) <- cliOpts
   validateConfig configErrors
-    <$> ( do
-            (c, mConfigFile) <- cliOpts
-            case mConfigFile of
-              Nothing -> pure c
-              Just configFile -> do
-                c' <- jsonConfig <$> readConfigFile configFile
-                pure $ c <> c'
-        )
+    <$> maybe
+      (pure c)
+      (fmap ((c <>) . jsonConfig) . readConfigFile)
+      mConfigFile
