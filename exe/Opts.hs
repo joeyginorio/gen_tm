@@ -27,40 +27,111 @@ import Data.Functor.Identity (Identity (..))
 import GHC.Generics (Generic)
 import qualified Hedgehog as Gen
 import qualified Hedgehog.Internal.Seed as Gen.Seed
-import qualified Options.Applicative as Opts
+import qualified Options.Applicative as Options
 
 data Config f = Config
-  { configOutputFolder :: f FilePath,
-    configOutputDataFileName :: f FilePath,
-    configOutputHistogramFileName :: f FilePath,
-    configOutputConfigFileName :: f FilePath,
-    configNumberOfExampes :: f Int,
-    configSeed :: f Gen.Seed
+  { configCommand :: !(Command f)
   }
   deriving stock (Generic)
-  deriving anyclass (Barbie.FunctorB, Barbie.TraversableB, Barbie.ApplicativeB, Barbie.ConstraintsB)
+  deriving anyclass (Barbie.FunctorB, Barbie.TraversableB, Barbie.ConstraintsB)
 
 deriving stock instance (Barbie.AllBF Show f Config) => Show (Config f)
 
 deriving stock instance (Barbie.AllBF Eq f Config) => Eq (Config f)
 
-customOptions :: Aeson.Options
-customOptions = Aeson.defaultOptions {Aeson.fieldLabelModifier = drop 6}
+configCustomJSONOptions :: Aeson.Options
+configCustomJSONOptions = Aeson.defaultOptions {Aeson.fieldLabelModifier = drop 6}
 
 instance (Barbie.AllBF Aeson.FromJSON f Config) => Aeson.FromJSON (Config f) where
-  parseJSON = Aeson.genericParseJSON customOptions
+  parseJSON = Aeson.genericParseJSON configCustomJSONOptions
 
 instance (Barbie.AllBF Aeson.ToJSON f Config) => Aeson.ToJSON (Config f) where
-  toJSON = Aeson.genericToJSON customOptions
-  toEncoding = Aeson.genericToEncoding customOptions
+  toJSON = Aeson.genericToJSON configCustomJSONOptions
+  toEncoding = Aeson.genericToEncoding configCustomJSONOptions
 
-$(Aeson.deriveJSON Aeson.defaultOptions {Aeson.fieldLabelModifier = drop 4} ''Gen.Seed)
+data Command f
+  = Tm !(GenTmConfig f)
+  | Comp !(GenCompConfig f)
+  deriving stock (Generic)
+  deriving anyclass (Barbie.FunctorB, Barbie.TraversableB, Barbie.ConstraintsB)
 
-instance (Alternative f) => Semigroup (Config f) where
+deriving stock instance (Barbie.AllBF Show f Command) => Show (Command f)
+
+deriving stock instance (Barbie.AllBF Eq f Command) => Eq (Command f)
+
+commandCustomJSONOptions :: Aeson.Options
+commandCustomJSONOptions = Aeson.defaultOptions {Aeson.fieldLabelModifier = drop 6}
+
+instance (Barbie.AllBF Aeson.FromJSON f Command) => Aeson.FromJSON (Command f) where
+  parseJSON = Aeson.genericParseJSON commandCustomJSONOptions
+
+instance (Barbie.AllBF Aeson.ToJSON f Command) => Aeson.ToJSON (Command f) where
+  toJSON = Aeson.genericToJSON commandCustomJSONOptions
+  toEncoding = Aeson.genericToEncoding commandCustomJSONOptions
+
+data GenTmConfig f = GenTmConfig
+  { genTmConfigOutputFolder :: !(f FilePath),
+    genTmConfigOutputDataFileName :: !(f FilePath),
+    genTmConfigOutputHistogramFileName :: !(f FilePath),
+    genTmConfigOutputConfigFileName :: !(f FilePath),
+    genTmConfigNumberOfExampes :: !(f Int),
+    genTmConfigSeed :: !(f Gen.Seed)
+  }
+  deriving stock (Generic)
+  deriving anyclass (Barbie.FunctorB, Barbie.TraversableB, Barbie.ApplicativeB, Barbie.ConstraintsB)
+
+deriving stock instance (Barbie.AllBF Show f GenTmConfig) => Show (GenTmConfig f)
+
+deriving stock instance (Barbie.AllBF Eq f GenTmConfig) => Eq (GenTmConfig f)
+
+instance (Alternative f) => Semigroup (GenTmConfig f) where
   (<>) = Barbie.bzipWith (<|>)
 
-instance (Alternative f) => Monoid (Config f) where
+instance (Alternative f) => Monoid (GenTmConfig f) where
   mempty = Barbie.bpure empty
+
+genTmConfigCustomJSONOptions :: Aeson.Options
+genTmConfigCustomJSONOptions = Aeson.defaultOptions {Aeson.fieldLabelModifier = drop 6}
+
+instance (Barbie.AllBF Aeson.FromJSON f GenTmConfig) => Aeson.FromJSON (GenTmConfig f) where
+  parseJSON = Aeson.genericParseJSON genTmConfigCustomJSONOptions
+
+instance (Barbie.AllBF Aeson.ToJSON f GenTmConfig) => Aeson.ToJSON (GenTmConfig f) where
+  toJSON = Aeson.genericToJSON genTmConfigCustomJSONOptions
+  toEncoding = Aeson.genericToEncoding genTmConfigCustomJSONOptions
+
+data GenCompConfig f = GenCompConfig
+  { genCompConfigOutputFolder :: !(f FilePath),
+    genCompConfigOutputConfigFileName :: !(f FilePath),
+    genCompConfigOutputDataFileName :: !(f FilePath),
+    genCompConfigInputFolder :: !(f FilePath),
+    genCompConfigInputDataFileName :: !(f FilePath),
+    genCompConfigNumberOfExampes :: !(f Int)
+  }
+  deriving stock (Generic)
+  deriving anyclass (Barbie.FunctorB, Barbie.TraversableB, Barbie.ApplicativeB, Barbie.ConstraintsB)
+
+deriving stock instance (Barbie.AllBF Show f GenCompConfig) => Show (GenCompConfig f)
+
+deriving stock instance (Barbie.AllBF Eq f GenCompConfig) => Eq (GenCompConfig f)
+
+instance (Alternative f) => Semigroup (GenCompConfig f) where
+  (<>) = Barbie.bzipWith (<|>)
+
+instance (Alternative f) => Monoid (GenCompConfig f) where
+  mempty = Barbie.bpure empty
+
+genCompConfigCustomJSONOptions :: Aeson.Options
+genCompConfigCustomJSONOptions = Aeson.defaultOptions {Aeson.fieldLabelModifier = drop 6}
+
+instance (Barbie.AllBF Aeson.FromJSON f GenCompConfig) => Aeson.FromJSON (GenCompConfig f) where
+  parseJSON = Aeson.genericParseJSON genCompConfigCustomJSONOptions
+
+instance (Barbie.AllBF Aeson.ToJSON f GenCompConfig) => Aeson.ToJSON (GenCompConfig f) where
+  toJSON = Aeson.genericToJSON genCompConfigCustomJSONOptions
+  toEncoding = Aeson.genericToEncoding genCompConfigCustomJSONOptions
+
+$(Aeson.deriveJSON Aeson.defaultOptions {Aeson.fieldLabelModifier = drop 4} ''Gen.Seed)
 
 readConfigFile :: FilePath -> IO Aeson.Value
 readConfigFile filePath = do
@@ -75,104 +146,177 @@ jsonConfig = fromResult . Aeson.fromJSON
     fromResult (Aeson.Success a) = a
     fromResult (Aeson.Error _) = Barbie.bpure Nothing
 
-cliConfigParser :: Config (Opts.Parser `Compose` Maybe)
-cliConfigParser = Barbie.bmap (Compose . optional) parser
+genTmConfigParser :: Config (Options.Parser `Compose` Maybe)
+genTmConfigParser = Barbie.bmap (Compose . optional) parser
   where
     parser =
-      Config
-        { configOutputFolder =
-            Opts.strOption $
-              Opts.long "output-folder"
-                <> Opts.short 'o'
-                <> Opts.metavar "OUTPUT_FOLDER"
-                <> Opts.help "Output folder",
-          configOutputDataFileName =
-            Opts.strOption $
-              Opts.long "output-data-file-name"
-                <> Opts.short 'd'
-                <> Opts.metavar "OUTPUT_DATA_FILE_NAME"
-                <> Opts.help "Output data file name",
-          configOutputHistogramFileName =
-            Opts.strOption $
-              Opts.long "output-histogram-file-name"
-                <> Opts.short 'h'
-                <> Opts.metavar "OUTPUT_HISTOGRAM_FILE_NAME"
-                <> Opts.help "Output histogram file name",
-          configOutputConfigFileName =
-            Opts.strOption $
-              Opts.long "output-config-file-name"
-                <> Opts.short 'c'
-                <> Opts.metavar "OUTPUT_CONFIG_FILE_NAME"
-                <> Opts.help "Output config file name",
-          configNumberOfExampes =
-            Opts.option Opts.auto $
-              Opts.long "number-of-examples"
-                <> Opts.short 'n'
-                <> Opts.metavar "NUMBER_OF_EXAMPLES"
-                <> Opts.help "Number of examples",
-          configSeed =
-            Gen.Seed.from
-              <$> Opts.option
-                Opts.auto
-                ( Opts.long "seed"
-                    <> Opts.short 's'
-                    <> Opts.metavar "SEED"
-                    <> Opts.help "Seed"
-                )
-        }
+      Config . Tm $
+        GenTmConfig
+          { genTmConfigOutputFolder =
+              Options.strOption $
+                Options.long "output-folder"
+                  <> Options.short 'o'
+                  <> Options.metavar "OUTPUT_FOLDER"
+                  <> Options.help "Output folder",
+            genTmConfigOutputDataFileName =
+              Options.strOption $
+                Options.long "output-data-file-name"
+                  <> Options.short 'd'
+                  <> Options.metavar "OUTPUT_DATA_FILE_NAME"
+                  <> Options.help "Output data file name",
+            genTmConfigOutputHistogramFileName =
+              Options.strOption $
+                Options.long "output-histogram-file-name"
+                  <> Options.short 'h'
+                  <> Options.metavar "OUTPUT_HISTOGRAM_FILE_NAME"
+                  <> Options.help "Output histogram file name",
+            genTmConfigOutputConfigFileName =
+              Options.strOption $
+                Options.long "output-config-file-name"
+                  <> Options.short 'c'
+                  <> Options.metavar "OUTPUT_CONFIG_FILE_NAME"
+                  <> Options.help "Output config file name",
+            genTmConfigNumberOfExampes =
+              Options.option Options.auto $
+                Options.long "number-of-examples"
+                  <> Options.short 'n'
+                  <> Options.metavar "NUMBER_OF_EXAMPLES"
+                  <> Options.help "Number of examples",
+            genTmConfigSeed =
+              Gen.Seed.from
+                <$> Options.option
+                  Options.auto
+                  ( Options.long "seed"
+                      <> Options.short 's'
+                      <> Options.metavar "SEED"
+                      <> Options.help "Seed"
+                  )
+          }
+
+genCompConfigParser :: Config (Options.Parser `Compose` Maybe)
+genCompConfigParser = Barbie.bmap (Compose . optional) parser
+  where
+    parser =
+      Config . Comp $
+        GenCompConfig
+          { genCompConfigOutputFolder =
+              Options.strOption $
+                Options.long "output-folder"
+                  <> Options.short 'o'
+                  <> Options.metavar "OUTPUT_FOLDER"
+                  <> Options.help "Output folder",
+            genCompConfigOutputConfigFileName =
+              Options.strOption $
+                Options.long "output-config-file-name"
+                  <> Options.short 'c'
+                  <> Options.metavar "OUTPUT_CONFIG_FILE_NAME"
+                  <> Options.help "Output config file name",
+            genCompConfigOutputDataFileName =
+              Options.strOption $
+                Options.long "output-data-file-name"
+                  <> Options.short 'd'
+                  <> Options.metavar "OUTPUT_DATA_FILE_NAME"
+                  <> Options.help "Output data file name",
+            genCompConfigInputFolder =
+              Options.strOption $
+                Options.long "input-folder"
+                  <> Options.short 'i'
+                  <> Options.metavar "INPUT_FOLDER"
+                  <> Options.help "Input folder",
+            genCompConfigInputDataFileName =
+              Options.strOption $
+                Options.long "input-data-file-name"
+                  <> Options.short 'f'
+                  <> Options.metavar "INPUT_DATA_FILE_NAME"
+                  <> Options.help "Input data file name",
+            genCompConfigNumberOfExampes =
+              Options.option Options.auto $
+                Options.long "number-of-examples"
+                  <> Options.short 'n'
+                  <> Options.metavar "NUMBER_OF_EXAMPLES"
+                  <> Options.help "Number of examples"
+          }
 
 parserInfo ::
   forall b f.
   Barbie.TraversableB b =>
-  b (Opts.Parser `Compose` f) ->
-  Opts.ParserInfo (b f, Maybe FilePath)
-parserInfo b =
+  b (Options.Parser `Compose` f) ->
+  String ->
+  Options.ParserInfo (b f, Maybe FilePath)
+parserInfo b desc =
   let parser =
         (,) <$> Barbie.bsequence b
           <*> optional
-            ( Opts.option Opts.str $
-                Opts.long "config-file"
-                  <> Opts.short 'f'
-                  <> Opts.metavar "CONFIG_FILE"
-                  <> Opts.help "Input config file name"
+            ( Options.option Options.str $
+                Options.long "config-file"
+                  <> Options.short 'f'
+                  <> Options.metavar "CONFIG_FILE"
+                  <> Options.help "Input config file name"
             )
-   in Opts.info (parser <**> Opts.helper) $
-        Opts.fullDesc
-          <> Opts.progDesc "Generate and export datasets for neural interpretation"
-          <> Opts.header "gen-tm - a tool for generating and exporting datasets for neural interpretation"
+   in Options.info parser $ Options.progDesc desc
 
-cliOpts :: IO (Config Maybe, Maybe FilePath)
-cliOpts = Opts.execParser $ parserInfo cliConfigParser
+command :: Options.Parser (Config Maybe, Maybe FilePath)
+command =
+  Options.subparser $
+    commandOpts "tm" genTmConfigParser "Generate terms"
+      <> commandOpts "comp" genCompConfigParser "Generate compositons of terms"
+  where
+    commandOpts cmd parser desc = Options.command cmd $ parserInfo parser desc
 
-configErrors :: Config (Const String)
-configErrors =
-  Config
-    { configOutputFolder = "output folder",
-      configOutputDataFileName = "output data file name",
-      configOutputHistogramFileName = "output histogram file name",
-      configOutputConfigFileName = "output config file name",
-      configNumberOfExampes = "number of examples",
-      configSeed = "seed"
+opts :: Options.ParserInfo (Config Maybe, Maybe FilePath)
+opts =
+  Options.info (command <**> Options.helper) $
+    Options.fullDesc
+      <> Options.progDesc "Generate and export datasets for neural interpretation"
+      <> Options.header "gen-tm - a tool for generating and exporting datasets for neural interpretation"
+
+genTmConfigErrors :: GenTmConfig (Const String)
+genTmConfigErrors =
+  GenTmConfig
+    { genTmConfigOutputFolder = "output folder",
+      genTmConfigOutputDataFileName = "output data file name",
+      genTmConfigOutputHistogramFileName = "output histogram file name",
+      genTmConfigOutputConfigFileName = "output config file name",
+      genTmConfigNumberOfExampes = "number of examples",
+      genTmConfigSeed = "seed"
     }
 
-validateConfig ::
+genCompConfigErrors :: GenCompConfig (Const String)
+genCompConfigErrors =
+  GenCompConfig
+    { genCompConfigOutputFolder = "output folder",
+      genCompConfigOutputConfigFileName = "output config file name",
+      genCompConfigOutputDataFileName = "output data file name",
+      genCompConfigInputFolder = "input folder",
+      genCompConfigInputDataFileName = "input data file name",
+      genCompConfigNumberOfExampes = "number of examples"
+    }
+
+validate ::
   forall b.
   (Barbie.TraversableB b, Barbie.ApplicativeB b) =>
   b (Const String) ->
   b Maybe ->
   Validation [String] (b Identity)
-validateConfig errorMessages mb =
-  Barbie.bsequence' $ Barbie.bzipWith validate mb errorMessages
+validate errorMessages mb =
+  Barbie.bsequence' $ Barbie.bzipWith go mb errorMessages
   where
-    validate :: forall a. Maybe a -> Const String a -> Validation [String] a
-    validate (Just a) _ = Validation.Success a
-    validate Nothing (Const errorMessage) = Validation.Failure [errorMessage]
+    go :: forall a. Maybe a -> Const String a -> Validation [String] a
+    go (Just a) _ = Validation.Success a
+    go Nothing (Const errorMessage) = Validation.Failure [errorMessage]
 
 config :: IO (Validation [String] (Config Identity))
 config = do
-  (c, mConfigFile) <- cliOpts
-  validateConfig configErrors
-    <$> maybe
-      (pure c)
-      (fmap ((c <>) . jsonConfig) . readConfigFile)
-      mConfigFile
+  (Config cmd, mConfigFile) <- Options.execParser opts
+  let go c =
+        maybe
+          (pure c)
+          (fmap ((c <>) . jsonConfig) . readConfigFile)
+          mConfigFile
+  case cmd of
+    Tm c ->
+      (Config . Tm <$>) . validate genTmConfigErrors
+        <$> go c
+    Comp c ->
+      (Config . Comp <$>) . validate genCompConfigErrors
+        <$> go c

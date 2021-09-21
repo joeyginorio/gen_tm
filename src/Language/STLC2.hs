@@ -3,6 +3,8 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveAnyClass #-}
 
 {- STLC.hs
    =======
@@ -23,6 +25,8 @@ import qualified Data.Set as Set
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Language.Haskell.TH as TH
+import GHC.Generics (Generic)
+import Data.Hashable (Hashable)
 
 {- ================================= Syntax ================================= -}
 
@@ -37,13 +41,15 @@ data Term = TmUnit                          -- ^ Unit              {Intro.}
           | TmFun  Id Type Term             -- ^ Functions
           | TmIf   Term Term Term           -- ^ If statements     {Elim.}
           | TmApp  Term Term                -- ^ Application
-          deriving stock (Show, Eq, Ord)
+          deriving stock (Show, Eq, Ord, Generic)
+          deriving anyclass (Hashable)
 
 -- | Lambda types
 data Type = TyUnit                          -- ^ Unit
           | TyBool                          -- ^ Booleans
           | TyFun  Type Type                -- ^ Functions
-          deriving stock (Show, Eq, Ord)
+          deriving stock (Show, Eq, Ord, Generic)
+          deriving anyclass (Hashable)
 
 -- | Binding,
 -- e.g., @x :: Bool => (x,Bool)@
@@ -143,7 +149,8 @@ data EvalStats a = EvalStats
     _evalStatsNumStepsAppFun :: a,
     _evalStatsNumStepsIfTrueFalse :: a
   }
-  deriving stock (Show, Eq, Ord, Functor)
+  deriving stock (Show, Eq, Ord, Functor, Generic)
+  deriving anyclass (Hashable)
 
 instance Semigroup a => Semigroup (EvalStats a) where
   EvalStats a b c <> EvalStats a' b' c' = EvalStats (a <> a') (b <> b') (c <> c')
@@ -228,7 +235,8 @@ data TermStats a = TermStats
     _termStatsNumIf :: a,
     _termStatsNumVar :: a
   }
-  deriving stock (Show, Eq, Ord, Functor)
+  deriving stock (Show, Eq, Ord, Functor, Generic)
+  deriving anyclass (Hashable)
 
 instance Semigroup a => Semigroup (TermStats a) where
   TermStats a b c d e f g <> TermStats a' b' c' d' e' f' g' = TermStats (a <> a') (b <> b') (c <> c') (d <> d') (e <> e') (f <> f') (g <> g')

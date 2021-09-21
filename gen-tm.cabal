@@ -42,6 +42,7 @@ library
                   , base
                   , bytestring >= 0.10.12.0
                   , containers
+                  , hashable
                   , hedgehog
                   , lens
                   , mmorph
