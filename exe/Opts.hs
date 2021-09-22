@@ -257,7 +257,7 @@ parserInfo b desc =
 
 command :: Options.Parser (Config Maybe, Maybe FilePath)
 command =
-  Options.subparser $
+  Options.hsubparser $
     commandOpts "tm" genTmConfigParser "Generate terms"
       <> commandOpts "comp" genCompConfigParser "Generate compositons of terms"
   where
