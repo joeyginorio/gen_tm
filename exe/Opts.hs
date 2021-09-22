@@ -227,7 +227,7 @@ genCompConfigParser = Barbie.bmap (Compose . optional) parser
             genCompConfigInputDataFileName =
               Options.strOption $
                 Options.long "input-data-file-name"
-                  <> Options.short 'f'
+                  <> Options.short 'a'
                   <> Options.metavar "INPUT_DATA_FILE_NAME"
                   <> Options.help "Input data file name",
             genCompConfigInputTrainingDataCSVFile =
