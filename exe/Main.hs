@@ -67,11 +67,15 @@ genCompAndExport config@Opts.GenCompConfig {..} =
         Dataset.readJsonLines (runIdentity genCompConfigInputFolder </> runIdentity genCompConfigInputDataFileName)
           >-> Dataset.cache (^. Dataset.exSTLC2TermPretty)
           >-> P.drain
+    liftIO . print $ "Read " <> show (length examples) <> " examples."
     keys <- for (runIdentity genCompConfigInputTrainingDataCSVFile) $ \fileName ->
       P.runEffect . P.execStateP mempty $
         Dataset.readCsv fileName
           >-> Dataset.cache (^. Dataset.teTermPretty)
           >-> P.drain
+    liftIO . print $ case keys of
+      Just ks -> "Read " <> show (length ks) <> " keys."
+      Nothing -> "Skipped reading keys."
     P.runEffect $
       Dataset.compositions examples (HashMap.keysSet <$> keys)
         >-> Dataset.deduplicate (HashMap.keysSet examples) (^. Dataset.exSTLC2TermPretty)

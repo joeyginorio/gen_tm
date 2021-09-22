@@ -258,7 +258,7 @@ readCsv ::
   FilePath ->
   P.Producer a m ()
 readCsv file =
-  let opts = Csv.defaultDecodeOptions {Csv.decDelimiter = fromIntegral (ord '\t')}
+  let opts = Csv.defaultDecodeOptions {Csv.decDelimiter = fromIntegral (ord ',')}
    in P.withFile file IO.ReadMode $ \h ->
         P.decodeByNameWith opts (P.fromHandle h)
           >-> P.concat
