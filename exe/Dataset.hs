@@ -1,9 +1,11 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -17,11 +19,14 @@ import Control.Monad (unless)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Reader (runReaderT)
 import Control.Monad.State (MonadState (get), evalStateT, modify)
-import Data.Aeson (FromJSON, Options (fieldLabelModifier), ToJSON (toEncoding), eitherDecodeStrict')
-import Data.Aeson.Encoding (encodingToLazyByteString)
-import Data.Aeson.TH (defaultOptions, deriveJSON)
+import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.Encoding as Aeson
+import qualified Data.Aeson.TH as Aeson
 import qualified Data.ByteString as BS
-import Data.ByteString.Lazy (snoc, toStrict)
+import qualified Data.ByteString.Lazy as BSL
+import Data.Char (ord)
+import qualified Data.Csv as CSV
+import qualified Data.Csv.Parser as Csv
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HashMap
 import Data.HashSet (HashSet)
@@ -40,8 +45,10 @@ import qualified Language.STLC2.Sample as STLC2.Sample
 import qualified Language.STLC2.ToLC as STLC2
 import Pipes ((>->))
 import qualified Pipes as P
+import qualified Pipes.ByteString as P hiding (map)
+import qualified Pipes.Csv as P
 import qualified Pipes.Lift as P
-import qualified Pipes.Prelude as P
+import qualified Pipes.Prelude as P hiding (fromHandle)
 import qualified Pipes.Safe as P
 import qualified Pipes.Safe.Prelude as P
 import qualified System.IO as IO
@@ -91,7 +98,7 @@ data Example where
   deriving anyclass (Hashable)
 
 makeLenses ''Example
-$(deriveJSON defaultOptions {fieldLabelModifier = drop 3} ''Example)
+$(Aeson.deriveJSON Aeson.defaultOptions {Aeson.fieldLabelModifier = drop 3} ''Example)
 
 -- | Nondeterministic producer of types and simply-typed lambda calculus terms.
 sampleStlc :: forall m r. Monad m => Seed.Seed -> P.Producer (STLC2.Type, STLC2.Term) m r
@@ -136,21 +143,27 @@ deduplicate s f = P.evalStateP s . P.for P.cat $ \ex -> do
       modify (HashSet.insert a)
     else pure ()
 
--- | Cache the examples.
-cache :: forall m r a. (Monad m, Eq a, Hashable a, MonadState (HashMap a Example) m) => (Example -> a) -> P.Pipe Example Example m r
+-- | Populate cache.
+cache :: forall m r a v. (Monad m, Eq a, Hashable a, MonadState (HashMap a v) m) => (v -> a) -> P.Pipe v v m r
 cache f = P.for P.cat $ \ex -> do
   modify (HashMap.insert (f ex) ex)
 
 -- | Produce compositional examples.
-compositions :: (Monad m) => HashMap a Example -> P.Producer Example m ()
-compositions m = P.for (P.each . HashMap.elems $ m) $ \ex -> do
-  let tm = ex ^. exSTLC2Term
-  P.for (P.each . HashMap.elems $ m) $ \ex' -> do
-    let tm' = ex' ^. exSTLC2Term
-        comp = STLC2.TmApp tm tm'
-    case runReaderT (STLC2.tyCheck comp) [] of
-      Left _err -> pure ()
-      Right ty -> P.yield $ toExample' ty comp
+compositions :: (Monad m, Eq a, Hashable a) => HashMap a Example -> Maybe (HashSet a) -> P.Producer Example m ()
+compositions examples keys =
+  forEachExample $ \ex -> do
+    let tm = ex ^. exSTLC2Term
+    forEachExample $ \ex' -> do
+      let tm' = ex' ^. exSTLC2Term
+          comp = STLC2.TmApp tm tm'
+      case runReaderT (STLC2.tyCheck comp) [] of
+        Left _err -> pure ()
+        Right ty -> P.yield $ toExample' ty comp
+  where
+    filteredExamples = case keys of
+      Nothing -> examples
+      Just s -> HashMap.filterWithKey (\a _ex -> HashSet.member a s) examples
+    forEachExample = P.for (P.each . HashMap.elems $ filteredExamples)
 
 data Histogram a = Histogram
   { _histSTLC2TermStats :: !(STLC2.TermStats a),
@@ -169,7 +182,7 @@ instance Monoid a => Monoid (Histogram a) where
   mempty = Histogram mempty mempty mempty mempty mempty mempty
 
 makeLenses ''Histogram
-$(deriveJSON defaultOptions {fieldLabelModifier = drop 5} ''Histogram)
+$(Aeson.deriveJSON Aeson.defaultOptions {Aeson.fieldLabelModifier = drop 5} ''Histogram)
 
 histogram ::
   forall m m' m'' m''' m'''' r.
@@ -196,19 +209,19 @@ data HistogramRecord = HistogramRecord {_hrValue :: !Int, _hrCount :: !Int}
   deriving stock (Show, Eq, Ord)
 
 makeLenses ''HistogramRecord
-$(deriveJSON defaultOptions {fieldLabelModifier = drop 3} ''HistogramRecord)
+$(Aeson.deriveJSON Aeson.defaultOptions {Aeson.fieldLabelModifier = drop 3} ''HistogramRecord)
 
 toRecords :: IntMap Int -> [HistogramRecord]
 toRecords im = uncurry HistogramRecord <$> IntMap.toList im
 
 -- | Write a JSON Lines text file.
-writeJsonLines :: forall m a r. (P.MonadSafe m, ToJSON a) => FilePath -> P.Consumer a m r
+writeJsonLines :: forall m a r. (P.MonadSafe m, Aeson.ToJSON a) => FilePath -> P.Consumer a m r
 writeJsonLines file = P.withFile file IO.WriteMode $ \h ->
-  P.map (toStrict . flip snoc 0x0a . encodingToLazyByteString . toEncoding)
+  P.map (BSL.toStrict . flip BSL.snoc 0x0a . Aeson.encodingToLazyByteString . Aeson.toEncoding)
     >-> P.for P.cat (\bs -> liftIO $ BS.hPut h bs >> IO.hFlush h)
 
 -- | Read a JSON Lines text file.
-readJsonLines :: forall m a. (P.MonadSafe m, FromJSON a) => FilePath -> P.Producer a m ()
+readJsonLines :: forall m a. (P.MonadSafe m, Aeson.FromJSON a) => FilePath -> P.Producer a m ()
 readJsonLines file = P.withFile file IO.ReadMode $ \h ->
   go h
   where
@@ -216,6 +229,36 @@ readJsonLines file = P.withFile file IO.ReadMode $ \h ->
       eof <- liftIO $ IO.hIsEOF h
       unless eof $ do
         bs <- liftIO $ BS.hGetLine h
-        case eitherDecodeStrict' bs of
+        case Aeson.eitherDecodeStrict' bs of
           Left err -> P.lift . P.throwM . userError $ "Failed to decode JSON: " <> err
           Right a -> P.yield a >> go h
+
+data TrainingExample = TrainingExample
+  { _teTermPretty :: !Text,
+    _teReducedTermPretty :: !Text,
+    _teNumSteps :: !Int
+  }
+  deriving stock (Show, Eq, Ord, Generic)
+
+instance CSV.FromNamedRecord TrainingExample where
+  parseNamedRecord r =
+    -- let opts = CSV.defaultOptions {CSV.fieldLabelModifier = drop 3}
+    --  in CSV.genericParseNamedRecord opts r
+    TrainingExample
+      <$> r CSV..: "inputs"
+      <*> r CSV..: "outputs"
+      <*> r CSV..: "num_steps"
+
+makeLenses ''TrainingExample
+
+-- | Read a CSV file.
+readCsv ::
+  forall m a.
+  (P.MonadSafe m, CSV.FromNamedRecord a) =>
+  FilePath ->
+  P.Producer a m ()
+readCsv file =
+  let opts = Csv.defaultDecodeOptions {Csv.decDelimiter = fromIntegral (ord '\t')}
+   in P.withFile file IO.ReadMode $ \h ->
+        P.decodeByNameWith opts (P.fromHandle h)
+          >-> P.concat

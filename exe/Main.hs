@@ -17,6 +17,7 @@ import qualified Data.HashMap.Strict as HashMap
 import qualified Data.HashSet as HashSet
 import qualified Data.List as List
 import qualified Data.Text.Lazy as Text.Lazy
+import Data.Traversable (for)
 import qualified Dataset
 import qualified Opts
 import Pipes ((>->))
@@ -61,14 +62,19 @@ genCompAndExport :: Opts.GenCompConfig Identity -> IO ()
 genCompAndExport config@Opts.GenCompConfig {..} =
   P.runSafeT $ do
     saveAsJson (runIdentity genCompConfigOutputFolder </> runIdentity genCompConfigOutputConfigFileName) (Opts.Config . Opts.Comp $ config)
-    cache <-
+    examples <-
       P.runEffect . P.execStateP mempty $
         Dataset.readJsonLines (runIdentity genCompConfigInputFolder </> runIdentity genCompConfigInputDataFileName)
           >-> Dataset.cache (^. Dataset.exSTLC2TermPretty)
           >-> P.drain
+    keys <- for (runIdentity genCompConfigInputTrainingDataCSVFile) $ \fileName ->
+      P.runEffect . P.execStateP mempty $
+        Dataset.readCsv fileName
+          >-> Dataset.cache (^. Dataset.teTermPretty)
+          >-> P.drain
     P.runEffect $
-      Dataset.compositions cache
-        >-> Dataset.deduplicate (HashMap.keysSet cache) (^. Dataset.exSTLC2TermPretty)
+      Dataset.compositions examples (HashMap.keysSet <$> keys)
+        >-> Dataset.deduplicate (HashMap.keysSet examples) (^. Dataset.exSTLC2TermPretty)
         >-> P.take (runIdentity genCompConfigNumberOfExampes)
         >-> P.tee (showProgress $ runIdentity genCompConfigNumberOfExampes)
         >-> Dataset.writeJsonLines (runIdentity genCompConfigOutputFolder </> runIdentity genCompConfigOutputDataFileName)

@@ -106,6 +106,7 @@ data GenCompConfig f = GenCompConfig
     genCompConfigOutputDataFileName :: !(f FilePath),
     genCompConfigInputFolder :: !(f FilePath),
     genCompConfigInputDataFileName :: !(f FilePath),
+    genCompConfigInputTrainingDataCSVFile :: !(f (Maybe FilePath)),
     genCompConfigNumberOfExampes :: !(f Int)
   }
   deriving stock (Generic)
@@ -229,6 +230,12 @@ genCompConfigParser = Barbie.bmap (Compose . optional) parser
                   <> Options.short 'f'
                   <> Options.metavar "INPUT_DATA_FILE_NAME"
                   <> Options.help "Input data file name",
+            genCompConfigInputTrainingDataCSVFile =
+              optional . Options.strOption $
+                Options.long "input-training-data-csv-file"
+                  <> Options.short 't'
+                  <> Options.metavar "INPUT_TRAINING_DATA_CSV_FILE"
+                  <> Options.help "Input training data CSV file",
             genCompConfigNumberOfExampes =
               Options.option Options.auto $
                 Options.long "number-of-examples"
@@ -289,6 +296,7 @@ genCompConfigErrors =
       genCompConfigOutputDataFileName = "output data file name",
       genCompConfigInputFolder = "input folder",
       genCompConfigInputDataFileName = "input data file name",
+      genCompConfigInputTrainingDataCSVFile = "input training data CSV file",
       genCompConfigNumberOfExampes = "number of examples"
     }
 
