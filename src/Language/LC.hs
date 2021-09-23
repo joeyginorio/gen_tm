@@ -1,8 +1,10 @@
 {-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE DeriveAnyClass #-}
 
 module Language.LC where
 
@@ -18,7 +20,9 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Text (Text)
 import qualified Data.Text as Text
+import GHC.Generics (Generic)
 import qualified Language.Haskell.TH as TH
+import Data.Hashable (Hashable)
 
 type Id = Text
 
@@ -27,7 +31,8 @@ data Term
   = TmVar Id
   | TmFun Id Term
   | TmApp Term Term
-  deriving stock (Show, Eq, Ord)
+  deriving stock (Show, Eq, Ord, Generic)
+  deriving anyclass (Hashable)
 
 $(deriveJSON defaultOptions ''Term)
 
@@ -56,7 +61,8 @@ data EvalStats a = EvalStats
   { _evalStatsNumSteps :: a,
     _evalStatsNumStepsAppFun :: a
   }
-  deriving stock (Show, Eq, Ord, Functor)
+  deriving stock (Show, Eq, Ord, Functor, Generic)
+  deriving anyclass (Hashable)
 
 instance Semigroup a => Semigroup (EvalStats a) where
   EvalStats a b <> EvalStats a' b' = EvalStats (a <> a') (b <> b')
@@ -122,13 +128,13 @@ updateEvalHistogram stats =
   over evalStatsNumSteps (IntMap.insertWith (+) (stats ^. evalStatsNumSteps) 1)
     . over evalStatsNumStepsAppFun (IntMap.insertWith (+) (stats ^. evalStatsNumStepsAppFun) 1)
 
-
 data TermStats a = TermStats
   { _termStatsNumFun :: a,
     _termStatsNumApp :: a,
     _termStatsNumVar :: a
   }
-  deriving stock (Show, Eq, Ord, Functor)
+  deriving stock (Show, Eq, Ord, Functor, Generic)
+  deriving anyclass (Hashable)
 
 instance Semigroup a => Semigroup (TermStats a) where
   TermStats a b c <> TermStats a' b' c' = TermStats (a <> a') (b <> b') (c <> c')

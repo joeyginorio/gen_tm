@@ -42,6 +42,7 @@ library
                   , base
                   , bytestring >= 0.10.12.0
                   , containers
+                  , hashable
                   , hedgehog
                   , lens
                   , mmorph
@@ -73,6 +74,7 @@ executable gen-tm
                   , barbies
                   , base
                   , bytestring >= 0.10.12.0
+                  , cassava
                   , containers
                   , either
                   , filepath
@@ -91,6 +93,7 @@ executable gen-tm
                   , pipes-safe
                   , pipes-safe >= 2.3.3
                   , pipes-safe >= 2.3.3
+                  , pipes-csv
                   , terminal-progress-bar
                   , text
                   , transformers

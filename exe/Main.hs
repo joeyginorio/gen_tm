@@ -13,8 +13,11 @@ import qualified Data.ByteString as BS
 import Data.ByteString.Lazy (toStrict)
 import qualified Data.Either.Validation as Validation
 import Data.Functor.Identity (Identity (..))
+import qualified Data.HashMap.Strict as HashMap
+import qualified Data.HashSet as HashSet
 import qualified Data.List as List
 import qualified Data.Text.Lazy as Text.Lazy
+import Data.Traversable (for)
 import qualified Dataset
 import qualified Opts
 import Pipes ((>->))
@@ -36,23 +39,49 @@ main = do
       error $
         "The following options are required but not provided: "
           <> List.intercalate ", " errorMessageList
-    Validation.Success x -> generateAndExport x
+    Validation.Success (Opts.Config (Opts.Tm config)) -> genTmAndExport config
+    Validation.Success (Opts.Config (Opts.Comp config)) -> genCompAndExport config
 
-generateAndExport :: Opts.Config Identity -> IO ()
-generateAndExport config@Opts.Config {..} =
+genTmAndExport :: Opts.GenTmConfig Identity -> IO ()
+genTmAndExport config@Opts.GenTmConfig {..} =
   P.runSafeT $ do
-    saveAsJson (runIdentity configOutputFolder </> runIdentity configOutputConfigFileName) config
+    saveAsJson (runIdentity genTmConfigOutputFolder </> runIdentity genTmConfigOutputConfigFileName) (Opts.Config . Opts.Tm $ config)
     hist <-
       P.runEffect . P.execStateP mempty $
-        Dataset.sampleStlc (runIdentity configSeed)
+        Dataset.sampleStlc (runIdentity genTmConfigSeed)
           >-> Dataset.toExample
-          >-> Dataset.deduplicate (^. Dataset.exSTLC2TermPretty)
-          >-> P.take (runIdentity configNumberOfExampes)
-          >-> P.tee (showProgress $ runIdentity configNumberOfExampes)
-          >-> P.tee (Dataset.writeJsonLines (runIdentity configOutputFolder </> runIdentity configOutputDataFileName))
+          >-> Dataset.deduplicate HashSet.empty (^. Dataset.exSTLC2TermPretty)
+          >-> P.take (runIdentity genTmConfigNumberOfExampes)
+          >-> P.tee (showProgress $ runIdentity genTmConfigNumberOfExampes)
+          >-> P.tee (Dataset.writeJsonLines (runIdentity genTmConfigOutputFolder </> runIdentity genTmConfigOutputDataFileName))
           >-> Dataset.histogram
     let hist' = fmap Dataset.toRecords hist
-    saveAsJson (runIdentity configOutputFolder </> runIdentity configOutputHistogramFileName) hist'
+    saveAsJson (runIdentity genTmConfigOutputFolder </> runIdentity genTmConfigOutputHistogramFileName) hist'
+
+genCompAndExport :: Opts.GenCompConfig Identity -> IO ()
+genCompAndExport config@Opts.GenCompConfig {..} =
+  P.runSafeT $ do
+    saveAsJson (runIdentity genCompConfigOutputFolder </> runIdentity genCompConfigOutputConfigFileName) (Opts.Config . Opts.Comp $ config)
+    examples <-
+      P.runEffect . P.execStateP mempty $
+        Dataset.readJsonLines (runIdentity genCompConfigInputFolder </> runIdentity genCompConfigInputDataFileName)
+          >-> Dataset.cache (^. Dataset.exSTLC2TermPretty)
+          >-> P.drain
+    liftIO . putStrLn $ "Read " <> show (length examples) <> " examples."
+    keys <- for (runIdentity genCompConfigInputTrainingDataCSVFile) $ \fileName ->
+      P.runEffect . P.execStateP mempty $
+        Dataset.readCsv fileName
+          >-> Dataset.cache (^. Dataset.teTermPretty)
+          >-> P.drain
+    liftIO . putStrLn $ case keys of
+      Just ks -> "Read " <> show (length ks) <> " keys."
+      Nothing -> "Skipped reading keys."
+    P.runEffect $
+      Dataset.compositions examples (HashMap.keysSet <$> keys)
+        >-> Dataset.deduplicate (HashMap.keysSet examples) (^. Dataset.exSTLC2TermPretty)
+        >-> P.take (runIdentity genCompConfigNumberOfExampes)
+        >-> P.tee (showProgress $ runIdentity genCompConfigNumberOfExampes)
+        >-> Dataset.writeJsonLines (runIdentity genCompConfigOutputFolder </> runIdentity genCompConfigOutputDataFileName)
 
 saveAsJson :: forall m a. (P.MonadSafe m, ToJSON a) => FilePath -> a -> m ()
 saveAsJson file a = P.withFile file IO.WriteMode $ \h ->
