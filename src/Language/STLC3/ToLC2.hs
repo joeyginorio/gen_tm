@@ -11,3 +11,6 @@ toLC2 (STLC3.TmVar x) = LC2.TmVar x
 toLC2 (STLC3.TmFun x _ty t) = LC2.TmFun x (toLC2 t)
 toLC2 (STLC3.TmIf s t u) = LC2.TmIf (toLC2 s) (toLC2 t) (toLC2 u)
 toLC2 (STLC3.TmApp s t) = LC2.TmApp (toLC2 s) (toLC2 t)
+toLC2 STLC3.TmNil = undefined
+toLC2 (STLC3.TmCons s t) = undefined
+toLC2 (STLC3.TmFold s t u) = undefined
