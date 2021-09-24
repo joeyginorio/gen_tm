@@ -35,7 +35,8 @@ genTy =
     Gen.choice
     [ -- non-recursive generators
       pure STLC3.TyUnit,
-      pure STLC3.TyBool
+      pure STLC3.TyBool,
+      pure STLC3.TyBList
     ]
     [ -- recursive generators
       STLC3.TyFun <$> genTy <*> genTy
@@ -67,6 +68,7 @@ shrinkExp (STLC3.TmApp f a) = fst . flip runReader STLC3.ids . runWriterT $ do
   case f' of
     STLC3.TmFun var _ b -> (: []) <$> (STLC3.subst var a b >>= STLC3.eval)
     _ -> pure []
+shrinkExp (STLC3.TmCons _ t) = [t]
 shrinkExp _ = []
 
 genWellTypedExp'' :: STLC3.Type -> GenM STLC3.Term
@@ -75,6 +77,14 @@ genWellTypedExp'' STLC3.TyBool = Gen.bool <&> bool STLC3.TmTrue STLC3.TmFalse
 genWellTypedExp'' (STLC3.TyFun ty ty') = do
   var <- freshVar
   STLC3.TmFun var ty <$> local (insertVar var ty) (genWellTypedExp' ty')
+genWellTypedExp'' STLC3.TyBList =
+  Gen.shrink shrinkExp $
+    Gen.recursive
+      Gen.choice
+      [ pure STLC3.TmNil
+      ]
+      [ STLC3.TmCons <$> genWellTypedExp' STLC3.TyBool <*> genWellTypedExp' STLC3.TyBList
+      ]
 
 freshVar :: GenM STLC3.Id
 freshVar = lift . FreshT $ do
@@ -92,7 +102,12 @@ genWellTypedExp''' ty =
         tm' <- genWellTypedExp'' ty
         tm'' <- genWellTypedExp'' ty
         pure (STLC3.TmIf tm tm' tm'')
-   in tmIf
+      tmFold = do
+        tm <- genWellTypedExp'' (STLC3.TyFun STLC3.TyBool (STLC3.TyFun ty ty))
+        tm' <- genWellTypedExp'' ty
+        tm'' <- genWellTypedExp'' STLC3.TyBList
+        pure (STLC3.TmFold tm tm' tm'')
+   in Gen.choice [tmIf, tmFold]
 
 genWellTypedApp :: STLC3.Type -> GenM STLC3.Term
 genWellTypedApp ty = do

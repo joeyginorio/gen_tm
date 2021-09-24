@@ -15,7 +15,7 @@ prop_commutative =
     ty <- forAll STLC2.Sample.genTy
     tm <- forAll (STLC2.Sample.genWellTypedExp ty)
     let tm' = STLC2.eval' tm
-    (CL.reduce <$> STLC2.compile tm) === (CL.reduce <$> STLC2.compile tm')
+    (CL.reduce' <$> STLC2.compile tm) === (CL.reduce' <$> STLC2.compile tm')
 
 prop_skk_identity :: Property
 prop_skk_identity =
@@ -23,7 +23,7 @@ prop_skk_identity =
     ty <- forAll STLC2.Sample.genTy
     tm <- forAll (STLC2.Sample.genWellTypedExp ty)
     cl <- forAll (maybe mzero pure $ STLC2.compile tm)
-    CL.reduce cl === CL.reduce (CL.App (CL.App (CL.App CL.S CL.K) CL.K) cl)
+    CL.reduce' cl === CL.reduce' (CL.App (CL.App (CL.App CL.S CL.K) CL.K) cl)
 
-testToCL :: IO Bool
-testToCL = checkParallel $$(discover)
+testSTLC2ToCL :: IO Bool
+testSTLC2ToCL = checkParallel $$(discover)

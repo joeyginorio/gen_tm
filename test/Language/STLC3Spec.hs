@@ -4,12 +4,12 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Language.STLC2Spec where
+module Language.STLC3Spec where
 
 import Control.Monad.Reader
 import Hedgehog (Property, checkParallel, discover, forAll, property, (===))
-import Language.STLC2
-import qualified Language.STLC2.Sample as Sample
+import Language.STLC3
+import qualified Language.STLC3.Sample as Sample
 
 prop_welltyped :: Property
 prop_welltyped =
@@ -28,5 +28,5 @@ prop_welltypedNormalForm =
     let ety' = runReaderT (tyCheck tm') []
     Right ty === ety'
 
-testSTLC2 :: IO Bool
-testSTLC2 = checkParallel $$(discover)
+testSTLC3 :: IO Bool
+testSTLC3 = checkParallel $$(discover)

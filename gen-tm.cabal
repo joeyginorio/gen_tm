@@ -104,6 +104,8 @@ test-suite spec
   other-modules:    Language.STLC2Spec
                   , Language.STLC2.ToCLSpec
                   , Language.STLC2.ToLCSpec
+                  , Language.STLC3Spec
+                  , Language.STLC3.ToLC2Spec
   build-depends:    QuickCheck
                   , base
                   , bytestring >= 0.10.12.0

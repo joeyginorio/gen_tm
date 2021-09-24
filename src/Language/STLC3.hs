@@ -400,8 +400,6 @@ toTHType TyBList = TH.AppT TH.ListT (toTHType TyBool)
 pprintTerm :: Term -> String
 pprintTerm = TH.pprint . toTHExp
 
--- (Bool -> ty2 -> ty2) -> ty2 -> [Bool] -> ty2
-
 -- | Pretty-print a term using Haskell syntax with type signature
 --
 -- >>> pprintTermWithSig $ TmApp (TmFun "x" TyBool (TmVar "x")) (TmApp (TmFun "y" TyBool (TmVar "y")) (TmApp (TmFun "z" TyBool (TmVar "z")) TmTrue))
