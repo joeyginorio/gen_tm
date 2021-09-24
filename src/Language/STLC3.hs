@@ -345,6 +345,9 @@ updateTermHistogram stats =
     . over termStatsNumApp (IntMap.insertWith (+) (stats ^. termStatsNumApp) 1)
     . over termStatsNumIf (IntMap.insertWith (+) (stats ^. termStatsNumIf) 1)
     . over termStatsNumVar (IntMap.insertWith (+) (stats ^. termStatsNumVar) 1)
+    . over termStatsNumNil (IntMap.insertWith (+) (stats ^. termStatsNumNil) 1)
+    . over termStatsNumCons (IntMap.insertWith (+) (stats ^. termStatsNumCons) 1)
+    . over termStatsNumFold (IntMap.insertWith (+) (stats ^. termStatsNumFold) 1)
 
 -- | Convert a term to a Template Haskell expression
 toTHExp :: Term -> TH.Exp
