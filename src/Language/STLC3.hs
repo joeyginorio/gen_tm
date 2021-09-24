@@ -155,20 +155,26 @@ fvs (TmVar x)          = Set.insert x Set.empty
 fvs (TmFun x _ tm)     = Set.delete x $ fvs tm
 fvs (TmIf tm1 tm2 tm3) = fvs tm1 `Set.union` fvs tm2 `Set.union` fvs tm3
 fvs (TmApp tm1 tm2)    = fvs tm1 `Set.union` fvs tm2
+fvs TmNil              = Set.empty
+fvs (TmCons tm1 tm2)   = fvs tm1 `Set.union` fvs tm2
+fvs (TmFold tm1 tm2 tm3) = fvs tm1 `Set.union` fvs tm2 `Set.union` fvs tm3
 
 -- | alpha conversion of terms (renaming of variables).
 --
 -- @aconv x y tm@ means change all @x@ to @y@ in @tm@
 aconv :: Id -> Id -> Term -> Term
-aconv _ _ TmUnit             = TmUnit
-aconv _ _ TmTrue             = TmTrue
-aconv _ _ TmFalse            = TmFalse
-aconv x y (TmVar z)          | x == z    = TmVar y
-                             | otherwise = TmVar z
-aconv x y (TmFun z ty tm)    | x == z    = TmFun y ty (aconv x y tm)
-                             | otherwise = TmFun z ty (aconv x y tm)
-aconv x y (TmApp tm1 tm2)    = TmApp (aconv x y tm1) (aconv x y tm2)
-aconv x y (TmIf tm1 tm2 tm3) = TmIf (aconv x y tm1) (aconv x y tm2) (aconv x y tm3)
+aconv _ _ TmUnit               = TmUnit
+aconv _ _ TmTrue               = TmTrue
+aconv _ _ TmFalse              = TmFalse
+aconv x y (TmVar z)            | x == z    = TmVar y
+                               | otherwise = TmVar z
+aconv x y (TmFun z ty tm)      | x == z    = TmFun y ty (aconv x y tm)
+                               | otherwise = TmFun z ty (aconv x y tm)
+aconv x y (TmApp tm1 tm2)      = TmApp (aconv x y tm1) (aconv x y tm2)
+aconv x y (TmIf tm1 tm2 tm3)   = TmIf (aconv x y tm1) (aconv x y tm2) (aconv x y tm3)
+aconv _ _ TmNil                = TmNil
+aconv x y (TmCons tm1 tm2)     = TmCons (aconv x y tm1) (aconv x y tm2)
+aconv x y (TmFold tm1 tm2 tm3) = TmFold (aconv x y tm1) (aconv x y tm2) (aconv x y tm3)
 
 data EvalStats a = EvalStats
   { _evalStatsNumSteps :: a,
@@ -217,6 +223,14 @@ subst x t (TmIf tm1 tm2 tm3) = do tm1' <- subst x t tm1
 subst x t (TmApp tm1 tm2)    = do tm1' <- subst x t tm1
                                   tm2' <- subst x t tm2
                                   return $ TmApp tm1' tm2'
+subst _ _ TmNil              = return TmNil
+subst x t (TmCons tm1 tm2)   = do tm1' <- subst x t tm1
+                                  tm2' <- subst x t tm2
+                                  return $ TmCons tm1' tm2'
+subst x t (TmFold tm1 tm2 tm3) = do tm1' <- subst x t tm1
+                                    tm2' <- subst x t tm2
+                                    tm3' <- subst x t tm3
+                                    return $ TmFold tm1' tm2' tm3'
 
 -- | The actual interpreter, using call-by-name evaluation order
 eval :: Term -> WRTerm
@@ -236,6 +250,21 @@ eval (TmApp (TmFun x _ tm1) tm2) = do scribe evalStatsNumSteps (Sum 1)
 eval (TmApp tm1 tm2)             = do scribe evalStatsNumSteps (Sum 1)
                                       tm1' <- eval tm1
                                       eval $ TmApp tm1' tm2
+eval (TmCons tm1 tm2)            = do scribe evalStatsNumSteps (Sum 1)
+                                      tm1' <- eval tm1
+                                      tm2' <- eval tm2
+                                      return $ TmCons tm1' tm2'
+eval (TmFold tm1 tm2 tm3)        = do scribe evalStatsNumSteps (Sum 1)
+                                      tm1' <- eval tm1
+                                      tm2' <- eval tm2
+                                      tm3' <- eval tm3
+                                      case tm3' of
+                                        TmNil -> return tm2'
+                                        TmCons tm4 tm5 ->
+                                          do tm4' <- eval tm4
+                                             tm5' <- eval tm5
+                                             eval $ TmApp (TmApp tm1' tm4') (TmFold tm1' tm2' tm5')
+                                        _ -> error "TmFold: third term is Neither TmNil nor TmCons"
 eval tm = return tm
 
 -- | Runs eval with a default list of fresh variable names
@@ -259,16 +288,19 @@ data TermStats a = TermStats
     _termStatsNumFun :: a,
     _termStatsNumApp :: a,
     _termStatsNumIf :: a,
-    _termStatsNumVar :: a
+    _termStatsNumVar :: a,
+    _termStatsNumNil :: a,
+    _termStatsNumCons :: a,
+    _termStatsNumFold :: a
   }
   deriving stock (Show, Eq, Ord, Functor, Generic)
   deriving anyclass (Hashable)
 
 instance Semigroup a => Semigroup (TermStats a) where
-  TermStats a b c d e f g <> TermStats a' b' c' d' e' f' g' = TermStats (a <> a') (b <> b') (c <> c') (d <> d') (e <> e') (f <> f') (g <> g')
+  TermStats a b c d e f g h i j <> TermStats a' b' c' d' e' f' g' h' i' j' = TermStats (a <> a') (b <> b') (c <> c') (d <> d') (e <> e') (f <> f') (g <> g') (h <> h') (i <> i') (j <> j')
 
 instance Monoid a => Monoid (TermStats a) where
-  mempty = TermStats mempty mempty mempty mempty mempty mempty mempty
+  mempty = TermStats mempty mempty mempty mempty mempty mempty mempty mempty mempty mempty
 
 makeLenses ''TermStats
 $(deriveJSON defaultOptions {fieldLabelModifier = drop 10} ''TermStats)
@@ -289,6 +321,14 @@ countConstructors = fmap getSum . execWriter . go
                                go tm2
                                go tm3
     go (TmVar _) = scribe termStatsNumVar (Sum 1)
+    go TmNil = scribe termStatsNumNil (Sum 1)
+    go (TmCons tm1 tm2) = do scribe termStatsNumCons (Sum 1)
+                             go tm1
+                             go tm2
+    go (TmFold tm1 tm2 tm3) = do scribe termStatsNumFold (Sum 1)
+                                 go tm1
+                                 go tm2
+                                 go tm3
 
 updateTermHistogram :: TermStats Int -> TermStats (IntMap Int) -> TermStats (IntMap Int)
 updateTermHistogram stats =
