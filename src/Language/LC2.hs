@@ -48,6 +48,10 @@ fvs :: Term -> Set Id
 fvs (TmVar x) = Set.insert x Set.empty
 fvs (TmFun x tm) = Set.delete x $ fvs tm
 fvs (TmApp tm1 tm2) = fvs tm1 `Set.union` fvs tm2
+fvs TmUnit = Set.empty
+fvs TmTrue = Set.empty
+fvs TmFalse = Set.empty
+fvs (TmIf tm1 tm2 tm3) = fvs tm1 `Set.union` fvs tm2 `Set.union` fvs tm3
 
 -- | alpha conversion of terms (renaming of variables).
 --
@@ -60,6 +64,10 @@ aconv x y (TmFun z tm)
   | x == z = TmFun y (aconv x y tm)
   | otherwise = TmFun z (aconv x y tm)
 aconv x y (TmApp tm1 tm2) = TmApp (aconv x y tm1) (aconv x y tm2)
+aconv _ _ TmUnit = TmUnit
+aconv _ _ TmTrue = TmTrue
+aconv _ _ TmFalse = TmFalse
+aconv x y (TmIf tm1 tm2 tm3) = TmIf (aconv x y tm1) (aconv x y tm2) (aconv x y tm3)
 
 data EvalStats a = EvalStats
   { _evalStatsNumSteps :: a,
@@ -105,6 +113,14 @@ subst x t (TmApp tm1 tm2) = do
   tm1' <- subst x t tm1
   tm2' <- subst x t tm2
   return $ TmApp tm1' tm2'
+subst _ _ TmUnit = return TmUnit
+subst _ _ TmTrue = return TmTrue
+subst _ _ TmFalse = return TmFalse
+subst x t (TmIf tm1 tm2 tm3) = do
+  tm1' <- subst x t tm1
+  tm2' <- subst x t tm2
+  tm3' <- subst x t tm3
+  return $ TmIf tm1' tm2' tm3'
 
 -- | The actual interpreter, using call-by-name evaluation order
 eval :: Term -> WRTerm
@@ -117,6 +133,12 @@ eval (TmApp tm1 tm2) = do
   scribe evalStatsNumSteps (Sum 1)
   tm1' <- eval tm1
   eval $ TmApp tm1' tm2
+eval (TmIf TmTrue tm2 _) = eval tm2
+eval (TmIf TmFalse _ tm3) = eval tm3
+eval (TmIf tm1 tm2 tm3) = do
+  scribe evalStatsNumSteps (Sum 1)
+  tm1' <- eval tm1
+  eval $ TmIf tm1' tm2 tm3
 eval tm = return tm
 
 -- | Runs eval with a default list of fresh variable names
@@ -135,16 +157,20 @@ updateEvalHistogram stats =
 data TermStats a = TermStats
   { _termStatsNumFun :: a,
     _termStatsNumApp :: a,
-    _termStatsNumVar :: a
+    _termStatsNumVar :: a,
+    _termStatsNumIf :: a,
+    _termStatsNumTrue :: a,
+    _termStatsNumFalse :: a,
+    _termStatsNumUnit :: a
   }
   deriving stock (Show, Eq, Ord, Functor, Generic)
   deriving anyclass (Hashable)
 
 instance Semigroup a => Semigroup (TermStats a) where
-  TermStats a b c <> TermStats a' b' c' = TermStats (a <> a') (b <> b') (c <> c')
+  TermStats a b c d e f g <> TermStats a' b' c' d' e' f' g' = TermStats (a <> a') (b <> b') (c <> c') (d <> d') (e <> e') (f <> f') (g <> g')
 
 instance Monoid a => Monoid (TermStats a) where
-  mempty = TermStats mempty mempty mempty
+  mempty = TermStats mempty mempty mempty mempty mempty mempty mempty
 
 makeLenses ''TermStats
 $(deriveJSON defaultOptions {fieldLabelModifier = drop 10} ''TermStats)
@@ -160,18 +186,34 @@ countConstructors = fmap getSum . execWriter . go
       go tm1
       go tm2
     go (TmVar _) = scribe termStatsNumVar (Sum 1)
+    go (TmIf tm1 tm2 tm3) = do
+      scribe termStatsNumIf (Sum 1)
+      go tm1
+      go tm2
+      go tm3
+    go TmTrue = scribe termStatsNumTrue (Sum 1)
+    go TmFalse = scribe termStatsNumFalse (Sum 1)
+    go TmUnit = scribe termStatsNumUnit (Sum 1)
 
 updateTermHistogram :: TermStats Int -> TermStats (IntMap Int) -> TermStats (IntMap Int)
 updateTermHistogram stats =
   over termStatsNumFun (IntMap.insertWith (+) (stats ^. termStatsNumFun) 1)
     . over termStatsNumApp (IntMap.insertWith (+) (stats ^. termStatsNumApp) 1)
     . over termStatsNumVar (IntMap.insertWith (+) (stats ^. termStatsNumVar) 1)
+    . over termStatsNumIf (IntMap.insertWith (+) (stats ^. termStatsNumIf) 1)
+    . over termStatsNumTrue (IntMap.insertWith (+) (stats ^. termStatsNumTrue) 1)
+    . over termStatsNumFalse (IntMap.insertWith (+) (stats ^. termStatsNumFalse) 1)
+    . over termStatsNumUnit (IntMap.insertWith (+) (stats ^. termStatsNumUnit) 1)
 
 -- | Convert a term to a Template Haskell expression
 toTHExp :: Term -> TH.Exp
 toTHExp (TmVar x) = TH.VarE $ TH.mkName $ Text.unpack x
 toTHExp (TmFun x tm) = TH.LamE [TH.VarP $ TH.mkName $ Text.unpack x] $ toTHExp tm
 toTHExp (TmApp tm1 tm2) = TH.AppE (toTHExp tm1) (toTHExp tm2)
+toTHExp (TmIf tm1 tm2 tm3) = TH.AppE (TH.AppE (TH.AppE (TH.VarE $ TH.mkName "ite") (toTHExp tm1)) (toTHExp tm2)) (toTHExp tm3)
+toTHExp TmTrue = TH.ConE $ TH.mkName "True"
+toTHExp TmFalse = TH.ConE $ TH.mkName "False"
+toTHExp TmUnit = TH.TupE []
 
 -- | Pretty-print a term using Haskell syntax
 --
