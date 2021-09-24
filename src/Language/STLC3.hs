@@ -68,8 +68,13 @@ $(deriveJSON defaultOptions ''Term)
 data Error = EVar  Id         -- ^ Variable not in context
            | EIf1  Term       -- ^ First term isn't Bool type
            | EIf2  Term Term  -- ^ Second and third term aren't the same type
-           | EFun1 Term Term  -- ^ Second term not valid iput to first term
-           | EFun2 Term       -- ^ First term isn't a funtion
+           | EFun1 Term Term  -- ^ Second term not valid input to first term
+           | EFun2 Term       -- ^ First term isn't a function
+           | ECons1 Term      -- ^ First term isn't a Boolean
+           | ECons2 Term      -- ^ Second term isn't a Boolean list
+           | EFold1 Term      -- ^ First term isn't a function from Bool
+           | EFold2 Term Term -- ^ Second term isn't compatible with first
+           | EFold3 Term      -- ^ Third term isn't a Boolean list
            deriving (Show, Eq)
 
 -- | Typecheck type = 'Reader' + 'Either' monad stack.
@@ -88,13 +93,13 @@ tyCheck (TmFun x ty1 tm)   = do ty2 <- local ((x,ty1):) $ tyCheck tm
                                 return $ TyFun ty1 ty2
 tyCheck (TmIf tm1 tm2 tm3) = do ty1 <- tyCheck tm1
                                 lift $ if ty1 == TyBool
-                                         then Left $ EIf1 tm1
-                                         else Right ()
+                                         then Right ()
+                                         else Left $ EIf1 tm1
                                 ty2 <- tyCheck tm2
                                 ty3 <- tyCheck tm3
                                 lift $ if ty2 == ty3
-                                         then Left $ EIf2 tm2 tm3
-                                         else Right ()
+                                         then Right ()
+                                         else Left $ EIf2 tm2 tm3
                                 return ty3
 tyCheck (TmApp tm1 tm2)    = do ty1 <- tyCheck tm1
                                 ty2 <- tyCheck tm2
@@ -103,6 +108,27 @@ tyCheck (TmApp tm1 tm2)    = do ty1 <- tyCheck tm1
                                            | ty11 == ty2 -> Right ty12
                                            | otherwise   -> Left $ EFun1 tm1 tm2
                                          _               -> Left $ EFun2 tm1
+tyCheck TmNil              = return TyBList
+tyCheck (TmCons tm1 tm2)   = do ty1 <- tyCheck tm1
+                                lift $ if ty1 == TyBool
+                                         then Right ()
+                                         else Left $ ECons1 tm1
+                                ty2 <- tyCheck tm2
+                                lift $ if ty2 == TyBList
+                                          then Right ()
+                                          else Left $ ECons2 tm2
+                                return TyBList
+tyCheck (TmFold tm1 tm2 tm3) = do ty1 <- tyCheck tm1
+                                  ty2 <- tyCheck tm2
+                                  ty3 <- tyCheck tm3
+                                  lift $ if ty3 == TyBList
+                                            then Right ()
+                                            else Left $ EFold3 tm3
+                                  lift $ case ty1 of
+                                           (TyFun TyBool ty12)
+                                             | ty12 == ty2 -> Right ty2
+                                             | otherwise   -> Left $ EFold2 tm1 tm2
+                                           _ -> Left $ EFold1 tm1
 
 find :: Id -> TcType
 find x = do ctx <- ask
