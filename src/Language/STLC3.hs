@@ -271,6 +271,9 @@ eval (TmFold _ tm2 TmNil)              = do scribe evalStatsNumSteps (Sum 1)
                                             eval tm2
 eval (TmFold tm1 tm2 (TmCons tm3 tm4)) = do scribe evalStatsNumSteps (Sum 1)
                                             eval $ TmApp (TmApp tm1 tm3) (TmFold tm1 tm2 tm4)
+eval (TmFold tm1 tm2 tm3)              = do scribe evalStatsNumSteps (Sum 1)
+                                            tm3' <- eval tm3
+                                            eval $ TmFold tm1 tm2 tm3'
 eval tm = return tm
 
 -- | Runs eval with a default list of fresh variable names
