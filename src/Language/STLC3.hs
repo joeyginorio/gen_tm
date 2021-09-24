@@ -118,15 +118,16 @@ tyCheck (TmCons tm1 tm2)   = do ty1 <- tyCheck tm1
                                           then Right ()
                                           else Left $ ECons2 tm2
                                 return TyBList
-tyCheck (TmFold tm1 tm2 tm3) = do ty1 <- tyCheck tm1
+tyCheck (TmFold tm1 tm2 tm3) = -- (Bool -> ty2 -> ty2) -> ty2 -> [Bool] -> ty2
+                               do ty1 <- tyCheck tm1
                                   ty2 <- tyCheck tm2
                                   ty3 <- tyCheck tm3
                                   lift $ if ty3 == TyBList
                                             then Right ()
                                             else Left $ EFold3 tm3
                                   lift $ case ty1 of
-                                           (TyFun TyBool ty12)
-                                             | ty12 == ty2 -> Right ty2
+                                           (TyFun TyBool (TyFun ty21 ty22))
+                                             | ty21 == ty2 && ty22 == ty2 -> Right $ TyFun ty1 (TyFun ty2 (TyFun ty3 ty2))
                                              | otherwise   -> Left $ EFold2 tm1 tm2
                                            _ -> Left $ EFold1 tm1
 
@@ -234,37 +235,30 @@ subst x t (TmFold tm1 tm2 tm3) = do tm1' <- subst x t tm1
 
 -- | The actual interpreter, using call-by-name evaluation order
 eval :: Term -> WRTerm
-eval (TmIf TmTrue tm2 _)         = do scribe evalStatsNumSteps (Sum 1)
-                                      scribe evalStatsNumStepsIfTrueFalse (Sum 1)
-                                      eval tm2
-eval (TmIf TmFalse _ tm3)        = do scribe evalStatsNumSteps (Sum 1)
-                                      scribe evalStatsNumStepsIfTrueFalse (Sum 1)
-                                      eval tm3
-eval (TmIf tm1 tm2 tm3)          = do scribe evalStatsNumSteps (Sum 1)
-                                      tm1' <- eval tm1
-                                      eval $ TmIf tm1' tm2 tm3
-eval (TmApp (TmFun x _ tm1) tm2) = do scribe evalStatsNumSteps (Sum 1)
-                                      scribe evalStatsNumStepsAppFun (Sum 1)
-                                      tm <- subst x tm2 tm1
-                                      eval tm
-eval (TmApp tm1 tm2)             = do scribe evalStatsNumSteps (Sum 1)
-                                      tm1' <- eval tm1
-                                      eval $ TmApp tm1' tm2
-eval (TmCons tm1 tm2)            = do scribe evalStatsNumSteps (Sum 1)
-                                      tm1' <- eval tm1
-                                      tm2' <- eval tm2
-                                      return $ TmCons tm1' tm2'
-eval (TmFold tm1 tm2 tm3)        = do scribe evalStatsNumSteps (Sum 1)
-                                      tm1' <- eval tm1
-                                      tm2' <- eval tm2
-                                      tm3' <- eval tm3
-                                      case tm3' of
-                                        TmNil -> return tm2'
-                                        TmCons tm4 tm5 ->
-                                          do tm4' <- eval tm4
-                                             tm5' <- eval tm5
-                                             eval $ TmApp (TmApp tm1' tm4') (TmFold tm1' tm2' tm5')
-                                        _ -> error "TmFold: third term is Neither TmNil nor TmCons"
+eval (TmIf TmTrue tm2 _)               = do scribe evalStatsNumSteps (Sum 1)
+                                            scribe evalStatsNumStepsIfTrueFalse (Sum 1)
+                                            eval tm2
+eval (TmIf TmFalse _ tm3)              = do scribe evalStatsNumSteps (Sum 1)
+                                            scribe evalStatsNumStepsIfTrueFalse (Sum 1)
+                                            eval tm3
+eval (TmIf tm1 tm2 tm3)                = do scribe evalStatsNumSteps (Sum 1)
+                                            tm1' <- eval tm1
+                                            eval $ TmIf tm1' tm2 tm3
+eval (TmApp (TmFun x _ tm1) tm2)       = do scribe evalStatsNumSteps (Sum 1)
+                                            scribe evalStatsNumStepsAppFun (Sum 1)
+                                            tm <- subst x tm2 tm1
+                                            eval tm
+eval (TmApp tm1 tm2)                   = do scribe evalStatsNumSteps (Sum 1)
+                                            tm1' <- eval tm1
+                                            eval $ TmApp tm1' tm2
+eval (TmCons tm1 tm2)                  = do scribe evalStatsNumSteps (Sum 1)
+                                            tm1' <- eval tm1
+                                            tm2' <- eval tm2
+                                            return $ TmCons tm1' tm2'
+eval (TmFold _ tm2 TmNil)              = do scribe evalStatsNumSteps (Sum 1)
+                                            eval tm2
+eval (TmFold tm1 tm2 (TmCons tm3 tm4)) = do scribe evalStatsNumSteps (Sum 1)
+                                            eval $ TmApp (TmApp tm1 tm3) (TmFold tm1 tm2 tm4)
 eval tm = return tm
 
 -- | Runs eval with a default list of fresh variable names
