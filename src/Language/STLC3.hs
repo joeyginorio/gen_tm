@@ -263,9 +263,6 @@ eval (TmApp (TmFun x _ tm1) tm2)       = do scribe evalStatsNumSteps (Sum 1)
 eval (TmApp tm1 tm2)                   = do scribe evalStatsNumSteps (Sum 1)
                                             tm1' <- eval tm1
                                             eval $ TmApp tm1' tm2
-eval (TmCons tm1 tm2)                  = do scribe evalStatsNumSteps (Sum 1)
-                                            tm1' <- eval tm1
-                                            return $ TmCons tm1' tm2
 eval (TmFold _ tm2 TmNil)              = do scribe evalStatsNumSteps (Sum 1)
                                             eval tm2
 eval (TmFold tm1 tm2 (TmCons tm3 tm4)) = do scribe evalStatsNumSteps (Sum 1)
