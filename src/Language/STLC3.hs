@@ -10,7 +10,7 @@ module Language.STLC3 where
 
 import Control.Lens (makeLenses, over, scribe, (^.), _2)
 import Control.Monad.Trans (MonadTrans (lift))
-import Control.Monad.Trans.Reader (Reader, ReaderT, ask, local, runReader)
+import Control.Monad.Trans.Reader (Reader, ReaderT (..), ask, local, runReader)
 import Control.Monad.Trans.Writer.Lazy (WriterT (runWriterT), execWriter)
 import Data.Aeson.TH (defaultOptions, deriveJSON, Options (fieldLabelModifier))
 import Data.IntMap.Strict (IntMap)
@@ -84,6 +84,18 @@ data Error = EVar  Id         -- ^ Variable not in context
 type TcType = ReaderT Context (Either Error) Type
 
 -- | Typecheck terms
+--
+-- >>> flip runReaderT [] . tyCheck $ TmIf TmTrue TmUnit TmUnit
+-- Right TyUnit
+--
+-- >>> flip runReaderT [] . tyCheck $ TmCons TmTrue (TmCons TmFalse TmNil)
+-- Right TyBList
+--
+-- >>> flip runReaderT [] . tyCheck $ TmFun "x" TyBool (TmFun "y" TyUnit (TmVar "y"))
+-- Right (TyFun TyBool (TyFun TyUnit TyUnit))
+--
+-- >>> flip runReaderT [] . tyCheck $ TmFold (TmFun "x" TyBool (TmFun "y" TyBool (TmVar "y"))) TmTrue (TmCons TmTrue (TmCons TmFalse TmNil))
+-- Right TyBool
 tyCheck :: Term -> TcType
 tyCheck TmUnit             = return TyUnit
 tyCheck TmTrue             = return TyBool
@@ -127,7 +139,7 @@ tyCheck (TmFold tm1 tm2 tm3) = -- (Bool -> ty2 -> ty2) -> ty2 -> [Bool] -> ty2
                                             else Left $ EFold3 tm3
                                   lift $ case ty1 of
                                            (TyFun TyBool (TyFun ty21 ty22))
-                                             | ty21 == ty2 && ty22 == ty2 -> Right $ TyFun ty1 (TyFun ty2 (TyFun ty3 ty2))
+                                             | ty21 == ty2 && ty22 == ty2 -> Right ty2
                                              | otherwise   -> Left $ EFold2 tm1 tm2
                                            _ -> Left $ EFold1 tm1
 
@@ -354,14 +366,24 @@ toTHExp' withSig (TmFun x ty tm) =
 -- if-then-else in Haskell needs to be nested due to conflicts with do notation and that leads to additional whitespace
 -- toTHExp' withSig (TmIf tm1 tm2 tm3) = TH.CondE (toTHExp' withSig tm1) (toTHExp' withSig tm2) (toTHExp' withSig tm3)
 -- instead we use if-then-else as a function, ite
-toTHExp' withSig (TmIf tm1 tm2 tm3) = TH.AppE (TH.AppE (TH.AppE (TH.VarE $ TH.mkName "ite") (toTHExp' withSig tm1)) (toTHExp' withSig tm2)) (toTHExp' withSig tm3)
-toTHExp' withSig (TmApp tm1 tm2) = TH.AppE (toTHExp' withSig tm1) (toTHExp' withSig tm2)
+toTHExp' withSig (TmIf tm1 tm2 tm3) =
+  TH.AppE (TH.AppE (TH.AppE (TH.VarE $ TH.mkName "ite") (toTHExp' withSig tm1)) (toTHExp' withSig tm2)) (toTHExp' withSig tm3)
+toTHExp' withSig (TmApp tm1 tm2) =
+  TH.AppE (toTHExp' withSig tm1) (toTHExp' withSig tm2)
+toTHExp' _ TmNil = TH.ListE []
+toTHExp' withSig (TmCons tm1 tm2) =
+  case toTHExp' withSig tm2 of
+    TH.ListE exps -> TH.ListE $ toTHExp' withSig tm1 : exps
+    _ -> error "toTHExp: TmCons expects a list"
+toTHExp' withSig (TmFold tm1 tm2 tm3) =
+  TH.AppE (TH.AppE (TH.AppE (TH.VarE $ TH.mkName "foldr") (toTHExp' withSig tm1)) (toTHExp' withSig tm2)) (toTHExp' withSig tm3)
 
 -- | Convert a type to a Template Haskell type
 toTHType :: Type -> TH.Type
 toTHType TyUnit = TH.TupleT 0
 toTHType TyBool = TH.ConT (TH.mkName "Bool")
 toTHType (TyFun ty ty') = TH.AppT (TH.AppT TH.ArrowT (toTHType ty)) (toTHType ty')
+toTHType TyBList = TH.AppT TH.ListT (toTHType TyBool)
 
 -- | Pretty-print a term using Haskell syntax
 --
@@ -370,8 +392,13 @@ toTHType (TyFun ty ty') = TH.AppT (TH.AppT TH.ArrowT (toTHType ty)) (toTHType ty
 --
 -- >>> pprintTerm $ TmIf (TmApp (TmFun "x" TyBool TmTrue) TmFalse) (TmFun "y" TyBool TmTrue) (TmFun "z" TyBool (TmVar "z"))
 -- "ite ((\\x -> True) False) (\\y -> True) (\\z -> z)"
+--
+-- >>> pprintTerm $ TmFold (TmFun "x" TyBool (TmFun "y" TyBool (TmVar "y"))) TmTrue (TmCons TmTrue (TmCons TmFalse TmNil))
+-- "foldr (\\x -> \\y -> y) True [True, False]"
 pprintTerm :: Term -> String
 pprintTerm = TH.pprint . toTHExp
+
+-- (Bool -> ty2 -> ty2) -> ty2 -> [Bool] -> ty2
 
 -- | Pretty-print a term using Haskell syntax with type signature
 --
@@ -380,6 +407,9 @@ pprintTerm = TH.pprint . toTHExp
 --
 -- >>> pprintTermWithSig $ TmIf (TmApp (TmFun "x" TyBool TmTrue) TmFalse) (TmFun "y" TyBool TmTrue) (TmFun "z" TyBool (TmVar "z"))
 -- "ite ((\\(x :: Bool) -> True) False) (\\(y :: Bool) -> True) (\\(z :: Bool) -> z)"
+--
+-- >>> pprintTermWithSig $ TmFold (TmFun "x" TyBool (TmFun "y" TyBool (TmVar "y"))) TmTrue (TmCons TmTrue (TmCons TmFalse TmNil))
+-- "foldr (\\(x :: Bool) -> \\(y :: Bool) -> y) True [True, False]"
 pprintTermWithSig :: Term -> String
 pprintTermWithSig = TH.pprint . toTHExpWithSig
 
