@@ -96,6 +96,9 @@ type TcType = ReaderT Context (Either Error) Type
 --
 -- >>> flip runReaderT [] . tyCheck $ TmFold (TmFun "x" TyBool (TmFun "y" TyBool (TmVar "y"))) TmTrue (TmCons TmTrue (TmCons TmFalse TmNil))
 -- Right TyBool
+--
+-- >>> flip runReaderT [] . tyCheck $ TmFold (TmFun "x0" TyBool (TmApp (TmFun "x1" TyBool (TmApp (TmFun "x5" TyBList (TmApp (TmFold (TmFun "x6" TyBool (TmFun "x7" (TyFun TyBList (TyFun TyBList TyBList)) (TmVar "x7"))) (TmFun "x8" TyBList (TmFun "x9" TyBList (TmVar "x5"))) TmNil) (TmVar "x5"))) (TmCons (TmVar "x0") (TmFold (TmFun "x2" TyBool (TmIf TmFalse (TmFun "x3" TyBList (TmVar "x3")) (TmFun "x4" TyBList (TmVar "x4")))) TmNil (TmCons (TmVar "x0") TmNil))))) (TmVar "x0"))) (TmCons TmFalse (TmApp (TmApp (TmFun "x10" TyBList (TmApp (TmFold (TmFun "x11" TyBool (TmFun "x12" (TyFun TyBList (TyFun TyBool TyBList)) (TmVar "x12"))) (TmFun "x13" TyBList (TmFun "x14" TyBool (TmVar "x13"))) TmNil) (TmVar "x10"))) (TmCons TmFalse TmNil)) TmTrue)) (TmCons (TmApp (TmApp (TmFun "x18" TyBList (TmFun "x19" TyBList (TmApp (TmFun "x20" TyBList TmTrue) (TmVar "x19")))) (TmCons TmFalse TmNil)) (TmFold (TmFun "x15" TyBool (TmApp (TmFun "x16" TyBool (TmFun "x17" TyBList (TmVar "x17"))) (TmVar "x15"))) (TmCons TmTrue TmNil) TmNil)) TmNil)
+-- Right TyBList
 tyCheck :: Term -> TcType
 tyCheck TmUnit             = return TyUnit
 tyCheck TmTrue             = return TyBool
@@ -270,6 +273,8 @@ eval (TmFold tm1 tm2 (TmCons tm3 tm4)) = do scribe evalStatsNumSteps (Sum 1)
 eval (TmFold tm1 tm2 tm3)              = do scribe evalStatsNumSteps (Sum 1)
                                             tm3' <- eval tm3
                                             eval $ TmFold tm1 tm2 tm3'
+eval (TmCons tm1 tm2)                  = do scribe evalStatsNumSteps (Sum 1)
+                                            TmCons <$> eval tm1 <*> eval tm2
 eval tm = return tm
 
 -- | Runs eval with a default list of fresh variable names
@@ -277,6 +282,18 @@ evalWR :: Term -> (Term, EvalStats Int)
 evalWR = over _2 (fmap getSum) . flip runReader ids . runWriterT . eval
 
 -- | Ignores writer output to just give output term
+--
+-- >>> eval' $ TmFold (TmFun "x0" TyBool (TmApp (TmFun "x1" TyBool (TmApp (TmFun "x5" TyBList (TmApp (TmFold (TmFun "x6" TyBool (TmFun "x7" (TyFun TyBList (TyFun TyBList TyBList)) (TmVar "x7"))) (TmFun "x8" TyBList (TmFun "x9" TyBList (TmVar "x5"))) TmNil) (TmVar "x5"))) (TmCons (TmVar "x0") (TmFold (TmFun "x2" TyBool (TmIf TmFalse (TmFun "x3" TyBList (TmVar "x3")) (TmFun "x4" TyBList (TmVar "x4")))) TmNil (TmCons (TmVar "x0") TmNil))))) (TmVar "x0"))) (TmCons TmFalse (TmApp (TmApp (TmFun "x10" TyBList (TmApp (TmFold (TmFun "x11" TyBool (TmFun "x12" (TyFun TyBList (TyFun TyBool TyBList)) (TmVar "x12"))) (TmFun "x13" TyBList (TmFun "x14" TyBool (TmVar "x13"))) TmNil) (TmVar "x10"))) (TmCons TmFalse TmNil)) TmTrue)) (TmCons (TmApp (TmApp (TmFun "x18" TyBList (TmFun "x19" TyBList (TmApp (TmFun "x20" TyBList TmTrue) (TmVar "x19")))) (TmCons TmFalse TmNil)) (TmFold (TmFun "x15" TyBool (TmApp (TmFun "x16" TyBool (TmFun "x17" TyBList (TmVar "x17"))) (TmVar "x15"))) (TmCons TmTrue TmNil) TmNil)) TmNil)
+-- TmCons TmTrue TmNil
+--
+-- >>> eval' $ TmFold (TmFun "x" TyBool (TmFun "y" TyBool (TmVar "y"))) TmTrue (TmCons TmTrue (TmCons TmFalse TmNil))
+-- TmTrue
+--
+-- >>> let and = TmFun "x" TyBool (TmFun "y" TyBool (TmIf (TmVar "x") (TmVar "y") (TmVar "x"))) in eval' $ TmFold and TmTrue (TmCons TmTrue (TmCons TmTrue (TmCons TmFalse TmNil)))
+-- TmFalse
+--
+-- >>> let or = TmFun "x" TyBool (TmFun "y" TyBool (TmIf (TmVar "x") (TmVar "x") (TmVar "y"))) in eval' $ TmFold or TmFalse (TmCons TmTrue (TmCons TmTrue (TmCons TmFalse TmNil)))
+-- TmTrue
 eval' :: Term -> Term
 eval' = fst . evalWR
 
@@ -375,8 +392,8 @@ toTHExp' withSig (TmApp tm1 tm2) =
 toTHExp' _ TmNil = TH.ListE []
 toTHExp' withSig (TmCons tm1 tm2) =
   case toTHExp' withSig tm2 of
-    TH.ListE exps -> TH.ListE $ toTHExp' withSig tm1 : exps
-    _ -> error "toTHExp: TmCons expects a list"
+    TH.ListE exps -> TH.ListE $ (:) (toTHExp' withSig tm1) exps
+    _ -> TH.AppE (TH.AppE (TH.ConE $ TH.mkName ":") (toTHExp' withSig tm1)) (toTHExp' withSig tm2)
 toTHExp' withSig (TmFold tm1 tm2 tm3) =
   TH.AppE (TH.AppE (TH.AppE (TH.VarE $ TH.mkName "foldr") (toTHExp' withSig tm1)) (toTHExp' withSig tm2)) (toTHExp' withSig tm3)
 
@@ -397,6 +414,15 @@ toTHType TyBList = TH.AppT TH.ListT (toTHType TyBool)
 --
 -- >>> pprintTerm $ TmFold (TmFun "x" TyBool (TmFun "y" TyBool (TmVar "y"))) TmTrue (TmCons TmTrue (TmCons TmFalse TmNil))
 -- "foldr (\\x -> \\y -> y) True [True, False]"
+--
+-- >>> foldr (\x -> \y -> y) True [True, False]
+-- True
+--
+-- >>> pprintTerm $ TmFold (TmFun "x0" TyBool (TmApp (TmFun "x1" TyBool (TmApp (TmFun "x5" TyBList (TmApp (TmFold (TmFun "x6" TyBool (TmFun "x7" (TyFun TyBList (TyFun TyBList TyBList)) (TmVar "x7"))) (TmFun "x8" TyBList (TmFun "x9" TyBList (TmVar "x5"))) TmNil) (TmVar "x5"))) (TmCons (TmVar "x0") (TmFold (TmFun "x2" TyBool (TmIf TmFalse (TmFun "x3" TyBList (TmVar "x3")) (TmFun "x4" TyBList (TmVar "x4")))) TmNil (TmCons (TmVar "x0") TmNil))))) (TmVar "x0"))) (TmCons TmFalse (TmApp (TmApp (TmFun "x10" TyBList (TmApp (TmFold (TmFun "x11" TyBool (TmFun "x12" (TyFun TyBList (TyFun TyBool TyBList)) (TmVar "x12"))) (TmFun "x13" TyBList (TmFun "x14" TyBool (TmVar "x13"))) TmNil) (TmVar "x10"))) (TmCons TmFalse TmNil)) TmTrue)) (TmCons (TmApp (TmApp (TmFun "x18" TyBList (TmFun "x19" TyBList (TmApp (TmFun "x20" TyBList TmTrue) (TmVar "x19")))) (TmCons TmFalse TmNil)) (TmFold (TmFun "x15" TyBool (TmApp (TmFun "x16" TyBool (TmFun "x17" TyBList (TmVar "x17"))) (TmVar "x15"))) (TmCons TmTrue TmNil) TmNil)) TmNil)
+-- "foldr (\\x0 -> (\\x1 -> (\\x5 -> foldr (\\x6 -> \\x7 -> x7) (\\x8 -> \\x9 -> x5) [] x5) ((:) x0 (foldr (\\x2 -> ite False (\\x3 -> x3) (\\x4 -> x4)) [] [x0]))) x0) ((:) False ((\\x10 -> foldr (\\x11 -> \\x12 -> x12) (\\x13 -> \\x14 -> x13) [] x10) [False] True)) [(\\x18 -> \\x19 -> (\\x20 -> True) x19) [False] (foldr (\\x15 -> (\\x16 -> \\x17 -> x17) x15) [True] [])]"
+--
+-- >>> let ite p t f = if p then t else f in foldr (\x0 -> (\x1 -> (\x5 -> foldr (\x6 -> \x7 -> x7) (\x8 -> \x9 -> x5) [] x5) ((:) x0 (foldr (\x2 -> ite False (\x3 -> x3) (\x4 -> x4)) [] [x0]))) x0) ((:) False ((\x10 -> foldr (\x11 -> \x12 -> x12) (\x13 -> \x14 -> x13) [] x10) [False] True)) [(\x18 -> \x19 -> (\x20 -> True) x19) [False] (foldr (\x15 -> (\x16 -> \x17 -> x17) x15) [True] [])]
+-- [True]
 pprintTerm :: Term -> String
 pprintTerm = TH.pprint . toTHExp
 

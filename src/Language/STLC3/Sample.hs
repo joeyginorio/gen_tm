@@ -10,7 +10,7 @@ module Language.STLC3.Sample where
 import Control.Applicative (Alternative (empty, (<|>)))
 import Control.Monad.Fresh (FreshT (..), runFreshT)
 import Control.Monad.Reader (MonadReader (ask, local), MonadTrans (..), ReaderT (runReaderT), runReader)
-import Control.Monad.State (MonadState (get, put), StateT, modify)
+import Control.Monad.State (MonadState (get, put), StateT, runStateT, modify)
 import Control.Monad.Trans.Writer.Lazy (WriterT (runWriterT))
 import Data.Bool (bool)
 import Data.Functor ((<&>))
@@ -138,6 +138,13 @@ genKnownTypeMaybe = do
           (1, genTy)
         ]
 
+-- | Sample.
+-- >>> flip runStateT (Seed.from 1) $ sample genTy
+-- (TyBList,Seed 16204969531660614133 5610259966137620355)
+--
+-- >>> flip runStateT (Seed.from 6) $ sample $ genWellTypedExp STLC3.TyBList
+-- Identity (TmFold (TmFun "x0" TyBool (TmApp (TmFun "x1" TyBool (TmApp (TmFun "x5" TyBList (TmApp (TmFold (TmFun "x6" TyBool (TmFun "x7" (TyFun TyBList (TyFun TyBList TyBList)) (TmVar "x7"))) (TmFun "x8" TyBList (TmFun "x9" TyBList (TmVar "x5"))) TmNil) (TmVar "x5"))) (TmCons (TmVar "x0") (TmFold (TmFun "x2" TyBool (TmIf TmFalse (TmFun "x3" TyBList (TmVar "x3")) (TmFun "x4" TyBList (TmVar "x4")))) TmNil (TmCons (TmVar "x0") TmNil))))) (TmVar "x0"))) (TmCons TmFalse (TmApp (TmApp (TmFun "x10" TyBList (TmApp (TmFold (TmFun "x11" TyBool (TmFun "x12" (TyFun TyBList (TyFun TyBool TyBList)) (TmVar "x12"))) (TmFun "x13" TyBList (TmFun "x14" TyBool (TmVar "x13"))) TmNil) (TmVar "x10"))) (TmCons TmFalse TmNil)) TmTrue)) (TmCons (TmApp (TmApp (TmFun "x18" TyBList (TmFun "x19" TyBList (TmApp (TmFun "x20" TyBList TmTrue) (TmVar "x19")))) (TmCons TmFalse TmNil)) (TmFold (TmFun "x15" TyBool (TmApp (TmFun "x16" TyBool (TmFun "x17" TyBList (TmVar "x17"))) (TmVar "x15"))) (TmCons TmTrue TmNil) TmNil)) TmNil),Seed 17676705464547183192 13115728398345486507)
+--
 sample :: forall m a. Monad m => GenT m a -> StateT Seed.Seed m a
 sample gen =
   let go :: StateT Seed.Seed m a
