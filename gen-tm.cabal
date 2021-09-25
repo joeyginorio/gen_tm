@@ -106,6 +106,7 @@ test-suite spec
                   , Language.STLC2.ToLCSpec
                   , Language.STLC3Spec
                   , Language.STLC3.ToLC2Spec
+                  , Language.LC2.ToLCSpec
   build-depends:    QuickCheck
                   , base
                   , bytestring >= 0.10.12.0

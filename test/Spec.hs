@@ -6,6 +6,7 @@ import Language.STLC2.ToLCSpec (testSTLC2ToLC)
 import Language.STLC2Spec (testSTLC2)
 import Language.STLC3.ToLC2Spec (testSTLC3ToLC2)
 import Language.STLC3Spec (testSTLC3)
+import Language.LC2.ToLCSpec (testSTLC3ToLC2ToLC)
 
 main :: IO ()
 main = do
@@ -14,3 +15,4 @@ main = do
   void testSTLC2ToLC
   void testSTLC3
   void testSTLC3ToLC2
+  void testSTLC3ToLC2ToLC
