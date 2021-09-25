@@ -88,13 +88,13 @@ tyCheck (TmFun x ty1 tm)   = do ty2 <- local ((x,ty1):) $ tyCheck tm
                                 return $ TyFun ty1 ty2
 tyCheck (TmIf tm1 tm2 tm3) = do ty1 <- tyCheck tm1
                                 lift $ if ty1 == TyBool
-                                         then Left $ EIf1 tm1
-                                         else Right ()
+                                         then Right ()
+                                         else Left $ EIf1 tm1
                                 ty2 <- tyCheck tm2
                                 ty3 <- tyCheck tm3
                                 lift $ if ty2 == ty3
-                                         then Left $ EIf2 tm2 tm3
-                                         else Right ()
+                                         then Right ()
+                                         else Left $ EIf2 tm2 tm3
                                 return ty3
 tyCheck (TmApp tm1 tm2)    = do ty1 <- tyCheck tm1
                                 ty2 <- tyCheck tm2

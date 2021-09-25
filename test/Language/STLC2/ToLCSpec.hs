@@ -16,5 +16,5 @@ prop_commutative =
     let tm' = STLC2.eval' tm
     LC.eval' (STLC2.toLC tm) === LC.eval' (STLC2.toLC tm')
 
-testToLC :: IO Bool
-testToLC = checkParallel $$(discover)
+testSTLC2ToLC :: IO Bool
+testSTLC2ToLC = checkParallel $$(discover)

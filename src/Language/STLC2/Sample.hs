@@ -25,28 +25,28 @@ import Hedgehog.Internal.Gen (GenT)
 import qualified Hedgehog.Internal.Gen as Gen
 import qualified Hedgehog.Internal.Seed as Seed
 import qualified Hedgehog.Internal.Tree as Tree
-import Language.STLC2 (Id, Term (..), Type (..), eval, ids, subst)
+import qualified Language.STLC2 as STLC2
 
-type GenM = ReaderT (Map Type [Term]) (FreshT Gen)
+type GenM = ReaderT (Map STLC2.Type [STLC2.Term]) (FreshT Gen)
 
-genTy :: forall m. MonadGen m => m Type
+genTy :: forall m. MonadGen m => m STLC2.Type
 genTy =
   Gen.recursive
     Gen.choice
     [ -- non-recursive generators
-      pure TyUnit,
-      pure TyBool
+      pure STLC2.TyUnit,
+      pure STLC2.TyBool
     ]
     [ -- recursive generators
-      TyFun <$> genTy <*> genTy
+      STLC2.TyFun <$> genTy <*> genTy
     ]
 
 -- | Finalize generation by running the monad transformers for the environment
-genWellTypedExp :: Type -> Gen Term
+genWellTypedExp :: STLC2.Type -> Gen STLC2.Term
 genWellTypedExp ty = runFreshT $ runReaderT (genWellTypedExp' ty) Map.empty
 
 -- | Main recursive mechanism for genersating expressions for a given type.
-genWellTypedExp' :: Type -> GenM Term
+genWellTypedExp' :: STLC2.Type -> GenM STLC2.Term
 genWellTypedExp' ty =
   Gen.shrink shrinkExp $
     genWellTypedPath ty
@@ -61,50 +61,50 @@ genWellTypedExp' ty =
           genWellTypedExp''' ty
         ]
 
-shrinkExp :: Term -> [Term]
-shrinkExp (TmApp f a) = fst . flip runReader ids . runWriterT $ do
-  f' <- eval f
+shrinkExp :: STLC2.Term -> [STLC2.Term]
+shrinkExp (STLC2.TmApp f a) = fst . flip runReader STLC2.ids . runWriterT $ do
+  f' <- STLC2.eval f
   case f' of
-    TmFun var _ b -> (: []) <$> (subst var a b >>= eval)
+    STLC2.TmFun var _ b -> (: []) <$> (STLC2.subst var a b >>= STLC2.eval)
     _ -> pure []
 shrinkExp _ = []
 
-genWellTypedExp'' :: Type -> GenM Term
-genWellTypedExp'' TyUnit = pure TmUnit
-genWellTypedExp'' TyBool = Gen.bool <&> bool TmTrue TmFalse
-genWellTypedExp'' (TyFun ty ty') = do
+genWellTypedExp'' :: STLC2.Type -> GenM STLC2.Term
+genWellTypedExp'' STLC2.TyUnit = pure STLC2.TmUnit
+genWellTypedExp'' STLC2.TyBool = Gen.bool <&> bool STLC2.TmTrue STLC2.TmFalse
+genWellTypedExp'' (STLC2.TyFun ty ty') = do
   var <- freshVar
-  TmFun var ty <$> local (insertVar var ty) (genWellTypedExp' ty')
+  STLC2.TmFun var ty <$> local (insertVar var ty) (genWellTypedExp' ty')
 
-freshVar :: GenM Id
+freshVar :: GenM STLC2.Id
 freshVar = lift . FreshT $ do
   i <- get
   modify succ
   pure (Text.pack $ 'x' : show i)
 
-insertVar :: Id -> Type -> Map Type [Term] -> Map Type [Term]
-insertVar x ty = Map.insertWith (<>) ty [TmVar x] . fmap (List.filter (/= TmVar x))
+insertVar :: STLC2.Id -> STLC2.Type -> Map STLC2.Type [STLC2.Term] -> Map STLC2.Type [STLC2.Term]
+insertVar x ty = Map.insertWith (<>) ty [STLC2.TmVar x] . fmap (List.filter (/= STLC2.TmVar x))
 
-genWellTypedExp''' :: Type -> GenM Term
+genWellTypedExp''' :: STLC2.Type -> GenM STLC2.Term
 genWellTypedExp''' ty =
   let tmIf = do
-        tm <- genWellTypedExp'' TyBool
+        tm <- genWellTypedExp'' STLC2.TyBool
         tm' <- genWellTypedExp'' ty
         tm'' <- genWellTypedExp'' ty
-        pure (TmIf tm tm' tm'')
+        pure (STLC2.TmIf tm tm' tm'')
    in tmIf
 
-genWellTypedApp :: Type -> GenM Term
+genWellTypedApp :: STLC2.Type -> GenM STLC2.Term
 genWellTypedApp ty = do
   tg <- genKnownTypeMaybe
   eg <- genWellTypedExp' tg
-  let tf = TyFun tg ty
+  let tf = STLC2.TyFun tg ty
   ef <- genWellTypedExp' tf
-  pure (TmApp ef eg)
+  pure (STLC2.TmApp ef eg)
 
 -- | Try to look up a variable of the desired type from the environment.
 -- This does not always succceed, throwing `empty` when unavailable.
-genWellTypedPath :: Type -> GenM Term
+genWellTypedPath :: STLC2.Type -> GenM STLC2.Term
 genWellTypedPath ty = do
   paths <- ask
   case fromMaybe [] (Map.lookup ty paths) of
@@ -112,7 +112,7 @@ genWellTypedPath ty = do
     es -> Gen.element es
 
 -- | Generate either known types from the environment or new types.
-genKnownTypeMaybe :: GenM Type
+genKnownTypeMaybe :: GenM STLC2.Type
 genKnownTypeMaybe = do
   known <- ask
   if Map.null known
