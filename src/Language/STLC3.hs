@@ -454,4 +454,4 @@ pprintTermWithSig = unwords . words . TH.pprint . toTHExpWithSig
 -- >>> pprintType $ TyFun (TyFun TyUnit TyBool) TyBool 
 -- "(() -> Bool) -> Bool"
 pprintType :: Type -> String
-pprintType = TH.pprint . toTHType
+pprintType = unwords . words . TH.pprint . toTHType

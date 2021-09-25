@@ -1,7 +1,11 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Main where
 
@@ -13,9 +17,12 @@ import qualified Data.ByteString as BS
 import Data.ByteString.Lazy (toStrict)
 import qualified Data.Either.Validation as Validation
 import Data.Functor.Identity (Identity (..))
+import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.HashSet as HashSet
+import Data.IntMap (IntMap)
 import qualified Data.List as List
+import Data.Text (Text)
 import qualified Data.Text.Lazy as Text.Lazy
 import Data.Traversable (for)
 import qualified Dataset
@@ -46,42 +53,57 @@ genTmAndExport :: Opts.GenTmConfig Identity -> IO ()
 genTmAndExport config@Opts.GenTmConfig {..} =
   P.runSafeT $ do
     saveAsJson (runIdentity genTmConfigOutputFolder </> runIdentity genTmConfigOutputConfigFileName) (Opts.Config . Opts.Tm $ config)
-    hist <-
+    case runIdentity genTmConfigLanguage of
+      Opts.STLC2 -> do
+        hist :: Dataset.Histogram2 (IntMap Int) <- go
+        let hist' = fmap Dataset.toRecords hist
+        saveAsJson (runIdentity genTmConfigOutputFolder </> runIdentity genTmConfigOutputHistogramFileName) hist'
+      Opts.STLC3 -> do
+        hist :: Dataset.Histogram3 (IntMap Int) <- go
+        let hist' = fmap Dataset.toRecords hist
+        saveAsJson (runIdentity genTmConfigOutputFolder </> runIdentity genTmConfigOutputHistogramFileName) hist'
+  where
+    go :: forall l. Dataset.HasExamples l => P.SafeT IO (Dataset.Histogram l (IntMap Int))
+    go =
       P.runEffect . P.execStateP mempty $
-        Dataset.sampleStlc (runIdentity genTmConfigSeed)
+        Dataset.sample (runIdentity genTmConfigSeed)
           >-> Dataset.toExample
-          >-> Dataset.deduplicate HashSet.empty (^. Dataset.exSTLC2TermPretty)
+          >-> Dataset.deduplicate HashSet.empty (^. Dataset.prettyTerm)
           >-> P.take (runIdentity genTmConfigNumberOfExampes)
           >-> P.tee (showProgress $ runIdentity genTmConfigNumberOfExampes)
           >-> P.tee (Dataset.writeJsonLines (runIdentity genTmConfigOutputFolder </> runIdentity genTmConfigOutputDataFileName))
           >-> Dataset.histogram
-    let hist' = fmap Dataset.toRecords hist
-    saveAsJson (runIdentity genTmConfigOutputFolder </> runIdentity genTmConfigOutputHistogramFileName) hist'
 
 genCompAndExport :: Opts.GenCompConfig Identity -> IO ()
 genCompAndExport config@Opts.GenCompConfig {..} =
   P.runSafeT $ do
     saveAsJson (runIdentity genCompConfigOutputFolder </> runIdentity genCompConfigOutputConfigFileName) (Opts.Config . Opts.Comp $ config)
-    examples <-
-      P.runEffect . P.execStateP mempty $
-        Dataset.readJsonLines (runIdentity genCompConfigInputFolder </> runIdentity genCompConfigInputDataFileName)
-          >-> Dataset.cache (^. Dataset.exSTLC2TermPretty)
-          >-> P.drain
-    liftIO . putStrLn $ "Read " <> show (length examples) <> " examples."
-    keys <- for (runIdentity genCompConfigInputTrainingDataCSVFile) $ \fileName ->
-      P.runEffect . P.execStateP mempty $
-        Dataset.readCsv fileName
-          >-> Dataset.cache (^. Dataset.teTermPretty)
-          >-> P.drain
-    liftIO . putStrLn $ case keys of
-      Just ks -> "Read " <> show (length ks) <> " keys."
-      Nothing -> "Skipped reading keys."
-    P.runEffect $
-      Dataset.compositions examples (HashMap.keysSet <$> keys)
-        >-> Dataset.deduplicate (HashMap.keysSet examples) (^. Dataset.exSTLC2TermPretty)
-        >-> P.take (runIdentity genCompConfigNumberOfExampes)
-        >-> P.tee (showProgress $ runIdentity genCompConfigNumberOfExampes)
-        >-> Dataset.writeJsonLines (runIdentity genCompConfigOutputFolder </> runIdentity genCompConfigOutputDataFileName)
+    case runIdentity genCompConfigLanguage of
+      Opts.STLC2 -> go @'Opts.STLC2
+      Opts.STLC3 -> go @'Opts.STLC3
+  where
+    go :: forall l. Dataset.HasExamples l => P.SafeT IO ()
+    go = do
+      examples :: HashMap Text (Dataset.Example l) <-
+        P.runEffect . P.execStateP mempty $
+          Dataset.readJsonLines (runIdentity genCompConfigInputFolder </> runIdentity genCompConfigInputDataFileName)
+            >-> Dataset.cache (^. Dataset.prettyTerm)
+            >-> P.drain
+      liftIO . putStrLn $ "Read " <> show (length examples) <> " examples."
+      keys <- for (runIdentity genCompConfigInputTrainingDataCSVFile) $ \fileName ->
+        P.runEffect . P.execStateP mempty $
+          Dataset.readCsv fileName
+            >-> Dataset.cache (^. Dataset.teTermPretty)
+            >-> P.drain
+      liftIO . putStrLn $ case keys of
+        Just ks -> "Read " <> show (length ks) <> " keys."
+        Nothing -> "Skipped reading keys."
+      P.runEffect $
+        Dataset.compositions examples (HashMap.keysSet <$> keys)
+          >-> Dataset.deduplicate (HashMap.keysSet examples) (^. Dataset.prettyTerm)
+          >-> P.take (runIdentity genCompConfigNumberOfExampes)
+          >-> P.tee (showProgress $ runIdentity genCompConfigNumberOfExampes)
+          >-> Dataset.writeJsonLines (runIdentity genCompConfigOutputFolder </> runIdentity genCompConfigOutputDataFileName)
 
 saveAsJson :: forall m a. (P.MonadSafe m, ToJSON a) => FilePath -> a -> m ()
 saveAsJson file a = P.withFile file IO.WriteMode $ \h ->

@@ -311,7 +311,7 @@ toTHType (TyFun ty ty') = TH.AppT (TH.AppT TH.ArrowT (toTHType ty)) (toTHType ty
 -- >>> pprintTerm $ TmIf (TmApp (TmFun "x" TyBool TmTrue) TmFalse) (TmFun "y" TyBool TmTrue) (TmFun "z" TyBool (TmVar "z"))
 -- "ite ((\\x -> True) False) (\\y -> True) (\\z -> z)"
 pprintTerm :: Term -> String
-pprintTerm = TH.pprint . toTHExp
+pprintTerm = unwords . words . TH.pprint . toTHExp
 
 -- | Pretty-print a term using Haskell syntax with type signature
 --
@@ -321,7 +321,7 @@ pprintTerm = TH.pprint . toTHExp
 -- >>> pprintTermWithSig $ TmIf (TmApp (TmFun "x" TyBool TmTrue) TmFalse) (TmFun "y" TyBool TmTrue) (TmFun "z" TyBool (TmVar "z"))
 -- "ite ((\\(x :: Bool) -> True) False) (\\(y :: Bool) -> True) (\\(z :: Bool) -> z)"
 pprintTermWithSig :: Term -> String
-pprintTermWithSig = TH.pprint . toTHExpWithSig
+pprintTermWithSig = unwords . words . TH.pprint . toTHExpWithSig
 
 -- | Pretty-print a type using Haskell syntax
 --
@@ -334,4 +334,4 @@ pprintTermWithSig = TH.pprint . toTHExpWithSig
 -- >>> pprintType $ TyFun (TyFun TyUnit TyBool) TyBool 
 -- "(() -> Bool) -> Bool"
 pprintType :: Type -> String
-pprintType = TH.pprint . toTHType
+pprintType = unwords . words . TH.pprint . toTHType

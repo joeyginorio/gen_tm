@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -60,7 +61,7 @@ deriving stock instance (Barbie.AllBF Show f Command) => Show (Command f)
 deriving stock instance (Barbie.AllBF Eq f Command) => Eq (Command f)
 
 commandCustomJSONOptions :: Aeson.Options
-commandCustomJSONOptions = Aeson.defaultOptions {Aeson.fieldLabelModifier = drop 6}
+commandCustomJSONOptions = Aeson.defaultOptions
 
 instance (Barbie.AllBF Aeson.FromJSON f Command) => Aeson.FromJSON (Command f) where
   parseJSON = Aeson.genericParseJSON commandCustomJSONOptions
@@ -69,13 +70,25 @@ instance (Barbie.AllBF Aeson.ToJSON f Command) => Aeson.ToJSON (Command f) where
   toJSON = Aeson.genericToJSON commandCustomJSONOptions
   toEncoding = Aeson.genericToEncoding commandCustomJSONOptions
 
+data Language = STLC2 | STLC3
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (Aeson.FromJSON, Aeson.ToJSON)
+
+language :: Options.ReadM Language
+language =
+  Options.str >>= \case
+    "stlc2" -> return STLC2
+    "stlc3" -> return STLC3
+    (_ :: String) -> Options.readerError "Accepted languages are: stlc2, stlc3"
+
 data GenTmConfig f = GenTmConfig
   { genTmConfigOutputFolder :: !(f FilePath),
     genTmConfigOutputDataFileName :: !(f FilePath),
     genTmConfigOutputHistogramFileName :: !(f FilePath),
     genTmConfigOutputConfigFileName :: !(f FilePath),
     genTmConfigNumberOfExampes :: !(f Int),
-    genTmConfigSeed :: !(f Gen.Seed)
+    genTmConfigSeed :: !(f Gen.Seed),
+    genTmConfigLanguage :: !(f Language)
   }
   deriving stock (Generic)
   deriving anyclass (Barbie.FunctorB, Barbie.TraversableB, Barbie.ApplicativeB, Barbie.ConstraintsB)
@@ -91,7 +104,7 @@ instance (Alternative f) => Monoid (GenTmConfig f) where
   mempty = Barbie.bpure empty
 
 genTmConfigCustomJSONOptions :: Aeson.Options
-genTmConfigCustomJSONOptions = Aeson.defaultOptions {Aeson.fieldLabelModifier = drop 6}
+genTmConfigCustomJSONOptions = Aeson.defaultOptions {Aeson.fieldLabelModifier = drop 11}
 
 instance (Barbie.AllBF Aeson.FromJSON f GenTmConfig) => Aeson.FromJSON (GenTmConfig f) where
   parseJSON = Aeson.genericParseJSON genTmConfigCustomJSONOptions
@@ -107,7 +120,8 @@ data GenCompConfig f = GenCompConfig
     genCompConfigInputFolder :: !(f FilePath),
     genCompConfigInputDataFileName :: !(f FilePath),
     genCompConfigInputTrainingDataCSVFile :: !(f (Maybe FilePath)),
-    genCompConfigNumberOfExampes :: !(f Int)
+    genCompConfigNumberOfExampes :: !(f Int),
+    genCompConfigLanguage :: !(f Language)
   }
   deriving stock (Generic)
   deriving anyclass (Barbie.FunctorB, Barbie.TraversableB, Barbie.ApplicativeB, Barbie.ConstraintsB)
@@ -123,7 +137,7 @@ instance (Alternative f) => Monoid (GenCompConfig f) where
   mempty = Barbie.bpure empty
 
 genCompConfigCustomJSONOptions :: Aeson.Options
-genCompConfigCustomJSONOptions = Aeson.defaultOptions {Aeson.fieldLabelModifier = drop 6}
+genCompConfigCustomJSONOptions = Aeson.defaultOptions {Aeson.fieldLabelModifier = drop 13}
 
 instance (Barbie.AllBF Aeson.FromJSON f GenCompConfig) => Aeson.FromJSON (GenCompConfig f) where
   parseJSON = Aeson.genericParseJSON genCompConfigCustomJSONOptions
@@ -191,7 +205,13 @@ genTmConfigParser = Barbie.bmap (Compose . optional) parser
                       <> Options.short 's'
                       <> Options.metavar "SEED"
                       <> Options.help "Seed"
-                  )
+                  ),
+            genTmConfigLanguage =
+              Options.option language $
+                Options.long "language"
+                  <> Options.short 'l'
+                  <> Options.metavar "LANGUAGE"
+                  <> Options.help "Language (stlc2, stlc3)"
           }
 
 genCompConfigParser :: Config (Options.Parser `Compose` Maybe)
@@ -241,7 +261,13 @@ genCompConfigParser = Barbie.bmap (Compose . optional) parser
                 Options.long "number-of-examples"
                   <> Options.short 'n'
                   <> Options.metavar "NUMBER_OF_EXAMPLES"
-                  <> Options.help "Number of examples"
+                  <> Options.help "Number of examples",
+            genCompConfigLanguage =
+              Options.option language $
+                Options.long "language"
+                  <> Options.short 'l'
+                  <> Options.metavar "LANGUAGE"
+                  <> Options.help "Language (stlc2, stlc3)"
           }
 
 parserInfo ::
@@ -285,7 +311,8 @@ genTmConfigErrors =
       genTmConfigOutputHistogramFileName = "output histogram file name",
       genTmConfigOutputConfigFileName = "output config file name",
       genTmConfigNumberOfExampes = "number of examples",
-      genTmConfigSeed = "seed"
+      genTmConfigSeed = "seed",
+      genTmConfigLanguage = "language"
     }
 
 genCompConfigErrors :: GenCompConfig (Const String)
@@ -297,7 +324,8 @@ genCompConfigErrors =
       genCompConfigInputFolder = "input folder",
       genCompConfigInputDataFileName = "input data file name",
       genCompConfigInputTrainingDataCSVFile = "input training data CSV file",
-      genCompConfigNumberOfExampes = "number of examples"
+      genCompConfigNumberOfExampes = "number of examples",
+      genCompConfigLanguage = "language"
     }
 
 validate ::
