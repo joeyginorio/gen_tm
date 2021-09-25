@@ -23,6 +23,7 @@ import qualified Data.Text as Text
 import qualified Language.Haskell.TH as TH
 import GHC.Generics (Generic)
 import Data.Hashable (Hashable)
+import Data.List (intercalate)
 
 {- ================================= Syntax ================================= -}
 
@@ -423,8 +424,11 @@ toTHType TyBList = TH.AppT TH.ListT (toTHType TyBool)
 --
 -- >>> let ite p t f = if p then t else f in foldr (\x0 -> (\x1 -> (\x5 -> foldr (\x6 -> \x7 -> x7) (\x8 -> \x9 -> x5) [] x5) ((:) x0 (foldr (\x2 -> ite False (\x3 -> x3) (\x4 -> x4)) [] [x0]))) x0) ((:) False ((\x10 -> foldr (\x11 -> \x12 -> x12) (\x13 -> \x14 -> x13) [] x10) [False] True)) [(\x18 -> \x19 -> (\x20 -> True) x19) [False] (foldr (\x15 -> (\x16 -> \x17 -> x17) x15) [True] [])]
 -- [True]
+--
+-- >>> pprintTerm $ TmApp (TmFun "x2" TyBList (TmApp (TmFun "x3" TyBList TmUnit) (TmVar "x2"))) (TmCons (TmFold (TmFun "x0" TyBool (TmFun "x1" TyBool (TmVar "x1"))) TmTrue (TmCons TmTrue (TmCons TmTrue TmNil))) TmNil)
+-- "(\\x2 -> (\\x3 -> ()) x2) [foldr (\\x0 -> \\x1 -> x1) True [True, True]]"
 pprintTerm :: Term -> String
-pprintTerm = TH.pprint . toTHExp
+pprintTerm = unwords . words . TH.pprint . toTHExp
 
 -- | Pretty-print a term using Haskell syntax with type signature
 --
@@ -437,7 +441,7 @@ pprintTerm = TH.pprint . toTHExp
 -- >>> pprintTermWithSig $ TmFold (TmFun "x" TyBool (TmFun "y" TyBool (TmVar "y"))) TmTrue (TmCons TmTrue (TmCons TmFalse TmNil))
 -- "foldr (\\(x :: Bool) -> \\(y :: Bool) -> y) True [True, False]"
 pprintTermWithSig :: Term -> String
-pprintTermWithSig = TH.pprint . toTHExpWithSig
+pprintTermWithSig = unwords . words . TH.pprint . toTHExpWithSig
 
 -- | Pretty-print a type using Haskell syntax
 --
