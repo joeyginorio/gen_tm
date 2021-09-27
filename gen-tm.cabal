@@ -37,8 +37,12 @@ library
                   , Language.STLC3
                   , Language.STLC3.Sample
                   , Language.STLC3.ToLC2
+                  , Language.STLC3Eager
+                  , Language.STLC3Eager.Sample
+                  , Language.STLC3Eager.ToLCEager
                   , Language.CL
                   , Language.LC
+                  , Language.LCEager
                   , Language.LC2
                   , Language.LC2.ToLC
                   , Paths_gen_tm

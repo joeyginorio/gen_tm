@@ -15,17 +15,15 @@
 module Language.STLC3Eager where
 
 import Bound (Scope, Var, abstract1, fromScope, instantiate1, toScope, (>>>=))
-import Control.Lens (ASetter, makeLenses, over, scribe, (^.), _2)
+import Control.Lens (makeLenses, over, scribe, (^.), _2)
 import Control.Monad (MonadPlus (mzero), ap, guard)
-import Control.Monad.Fresh (Fresh, MonadFresh (fresh), runFreshFrom, runFresh)
-import Control.Monad.Trans (MonadTrans (lift))
+import Control.Monad.Fresh (Fresh, MonadFresh (fresh), runFresh, runFreshFrom)
 import Control.Monad.Trans.Maybe (MaybeT (..))
-import Control.Monad.Trans.Reader (Reader, ReaderT (..), ask, local, runReader)
-import Control.Monad.Trans.Writer.Lazy (Writer, WriterT (runWriterT), execWriter, runWriter)
+import Control.Monad.Trans.Writer.Lazy (Writer, execWriter, runWriter)
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Aeson.TH (Options (fieldLabelModifier), defaultOptions, deriveJSON)
-import Data.Deriving (deriveEq1, deriveOrd1, deriveShow1)
-import Data.Functor.Classes (compare1, eq1, showsPrec1)
+import Data.Deriving (deriveEq1, deriveOrd1, deriveRead1, deriveShow1)
+import Data.Functor.Classes (compare1, eq1, readsPrec1, showsPrec1)
 import Data.Hashable (Hashable)
 import Data.Hashable.Lifted (Hashable1)
 import Data.IntMap.Strict (IntMap)
@@ -33,14 +31,9 @@ import qualified Data.IntMap.Strict as IntMap
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Monoid (Sum (..))
-import Data.Set (Set)
-import qualified Data.Set as Set
-import Data.Text (Text)
-import qualified Data.Text as Text
 import GHC.Generics (Generic, Generic1)
 import qualified Language.Haskell.TH as TH
 import Prelude hiding (False, True, head, tail)
-import qualified Prelude
 
 data Ty
   = -- | Arrow type (functions).
@@ -51,7 +44,7 @@ data Ty
     TBool
   | -- | List type.
     TList Ty
-  deriving stock (Eq, Ord, Show, Generic)
+  deriving stock (Eq, Ord, Show, Read, Generic)
   deriving anyclass (Hashable)
 
 data Exp a
@@ -77,6 +70,8 @@ data Exp a
     Foldr {step :: Exp a, initial :: Exp a, list :: Exp a}
   deriving stock (Functor, Foldable, Traversable, Generic, Generic1)
   deriving anyclass (Hashable, Hashable1)
+
+infixl 9 :@
 
 instance Applicative Exp where
   pure = Var
@@ -112,14 +107,17 @@ instance ToJSON a => ToJSON (Scope () Exp a)
 instance ToJSON a => ToJSON (Exp a)
 
 deriveEq1 ''Exp
-deriveShow1 ''Exp
 deriveOrd1 ''Exp
+deriveRead1 ''Exp
+deriveShow1 ''Exp
 
 instance Eq a => Eq (Exp a) where (==) = eq1
 
 instance Ord a => Ord (Exp a) where compare = compare1
 
 instance Show a => Show (Exp a) where showsPrec = showsPrec1
+
+instance Read a => Read (Exp a) where readsPrec = readsPrec1
 
 -- | Smart constructor for lambda terms
 lam :: forall a. Eq a => Ty -> a -> Exp a -> Exp a
@@ -206,7 +204,6 @@ nf (Foldr s i l) = do
 --
 -- >>> let or = lam TBool 'x' (lam TBool 'y' (If (Var 'x') (Var 'x') (Var 'y'))) in nf' $ Foldr or True (Cons TBool True (Cons TBool True (Cons TBool False (Nil TBool))))
 -- (True,EvalStats {_evalStatsNumSteps = 13})
---
 nf' :: forall a. Exp a -> (Exp a, EvalStats Int)
 nf' = over _2 (fmap getSum) . runWriter . nf
 
@@ -349,6 +346,10 @@ countConstructors = fmap getSum . execWriter . go
       go i
       go l
 
+updateTermHistogram :: TermStats Int -> TermStats (IntMap Int) -> TermStats (IntMap Int)
+updateTermHistogram stats =
+  over termStatsNumNode (IntMap.insertWith (+) (stats ^. termStatsNumNode) 1)
+
 type TyTH a = Fresh a TH.Exp
 
 -- | Convert a term to a Template Haskell expression
@@ -426,7 +427,7 @@ toTHType (TList ty') = TH.AppT TH.ListT (toTHType ty')
 --
 -- >>> pprintTerm $ Foldr (lam TBool 'a' ((:@) (lam TBool 'b' ((:@) (lam (TList TBool) 'f' ((:@) (Foldr (lam TBool 'g' (lam (TArr (TList TBool) (TArr (TList TBool) (TList TBool))) 'h' (Var 'h'))) (lam (TList TBool) 'i' (lam (TList TBool) 'j' (Var 'f'))) (Nil TBool)) (Var 'f'))) (Cons TBool (Var 'a') (Foldr (lam TBool 'c' (If False (lam (TList TBool) 'd' (Var 'd')) (lam (TList TBool) 'e' (Var 'e')))) (Nil TBool) (Cons TBool (Var 'a') (Nil TBool)))))) (Var 'a'))) (Cons TBool False ((:@) ((:@) (lam (TList TBool) 'k' ((:@) (Foldr (lam TBool 'l' (lam (TArr (TList TBool) (TArr TBool (TList TBool))) 'm' (Var 'm'))) (lam (TList TBool) 'n' (lam TBool 'o' (Var 'n'))) (Nil TBool)) (Var 'k'))) (Cons TBool False (Nil TBool))) True)) (Cons TBool ((:@) ((:@) (lam (TList TBool) 's' (lam (TList TBool) 't' ((:@) (lam (TList TBool) 'u' True) (Var 't')))) (Cons TBool False (Nil TBool))) (Foldr (lam TBool 'p' ((:@) (lam TBool 'q' (lam (TList TBool) 'r' (Var 'r'))) (Var 'p'))) (Cons TBool True (Nil TBool)) (Nil TBool))) (Nil TBool))
 -- "foldr (\\x0 -> (\\x1 -> (\\x2 -> foldr (\\x3 -> \\x4 -> x4) (\\x5 -> \\x6 -> x2) [] x2) ((:) x0 (foldr (\\x7 -> ite False (\\x8 -> x8) (\\x9 -> x9)) [] [x0]))) x0) ((:) False ((\\x10 -> foldr (\\x11 -> \\x12 -> x12) (\\x13 -> \\x14 -> x13) [] x10) [False] True)) [(\\x15 -> \\x16 -> (\\x17 -> True) x16) [False] (foldr (\\x18 -> (\\x19 -> \\x20 -> x20) x18) [True] [])]"
--- 
+--
 -- >>> let ite p t f = if p then t else f in foldr (\x0 -> (\x1 -> (\x2 -> foldr (\x3 -> \x4 -> x4) (\x5 -> \x6 -> x2) [] x2) ((:) x0 (foldr (\x7 -> ite Prelude.False (\x8 -> x8) (\x9 -> x9)) [] [x0]))) x0) ((:) Prelude.False ((\x10 -> foldr (\x11 -> \x12 -> x12) (\x13 -> \x14 -> x13) [] x10) [Prelude.False] Prelude.True)) [(\x15 -> \x16 -> (\x17 -> Prelude.True) x16) [Prelude.False] (foldr (\x18 -> (\x19 -> \x20 -> x20) x18) [Prelude.True] [])]
 -- [True]
 --
@@ -451,7 +452,7 @@ pprintTerm = unwords . words . TH.pprint . toTHExp (toEnum 0)
 --
 -- >>> pprintTermWithSig $ Foldr (lam TBool 'a' ((:@) (lam TBool 'b' ((:@) (lam (TList TBool) 'f' ((:@) (Foldr (lam TBool 'g' (lam (TArr (TList TBool) (TArr (TList TBool) (TList TBool))) 'h' (Var 'h'))) (lam (TList TBool) 'i' (lam (TList TBool) 'j' (Var 'f'))) (Nil TBool)) (Var 'f'))) (Cons TBool (Var 'a') (Foldr (lam TBool 'c' (If False (lam (TList TBool) 'd' (Var 'd')) (lam (TList TBool) 'e' (Var 'e')))) (Nil TBool) (Cons TBool (Var 'a') (Nil TBool)))))) (Var 'a'))) (Cons TBool False ((:@) ((:@) (lam (TList TBool) 'k' ((:@) (Foldr (lam TBool 'l' (lam (TArr (TList TBool) (TArr TBool (TList TBool))) 'm' (Var 'm'))) (lam (TList TBool) 'n' (lam TBool 'o' (Var 'n'))) (Nil TBool)) (Var 'k'))) (Cons TBool False (Nil TBool))) True)) (Cons TBool ((:@) ((:@) (lam (TList TBool) 's' (lam (TList TBool) 't' ((:@) (lam (TList TBool) 'u' True) (Var 't')))) (Cons TBool False (Nil TBool))) (Foldr (lam TBool 'p' ((:@) (lam TBool 'q' (lam (TList TBool) 'r' (Var 'r'))) (Var 'p'))) (Cons TBool True (Nil TBool)) (Nil TBool))) (Nil TBool))
 -- "foldr (\\(x0 :: Bool) -> (\\(x1 :: Bool) -> (\\(x2 :: [Bool]) -> foldr (\\(x3 :: Bool) -> \\(x4 :: [Bool] -> [Bool] -> [Bool]) -> x4) (\\(x5 :: [Bool]) -> \\(x6 :: [Bool]) -> x2) [] x2) ((:) x0 (foldr (\\(x7 :: Bool) -> ite False (\\(x8 :: [Bool]) -> x8) (\\(x9 :: [Bool]) -> x9)) [] [x0]))) x0) ((:) False ((\\(x10 :: [Bool]) -> foldr (\\(x11 :: Bool) -> \\(x12 :: [Bool] -> Bool -> [Bool]) -> x12) (\\(x13 :: [Bool]) -> \\(x14 :: Bool) -> x13) [] x10) [False] True)) [(\\(x15 :: [Bool]) -> \\(x16 :: [Bool]) -> (\\(x17 :: [Bool]) -> True) x16) [False] (foldr (\\(x18 :: Bool) -> (\\(x19 :: Bool) -> \\(x20 :: [Bool]) -> x20) x18) [True] [])]"
--- 
+--
 -- >>> let ite p t f = if p then t else f in foldr (\(x0 :: Bool) -> (\(x1 :: Bool) -> (\(x2 :: [Bool]) -> foldr (\(x3 :: Bool) -> \(x4 :: [Bool] -> [Bool] -> [Bool]) -> x4) (\(x5 :: [Bool]) -> \(x6 :: [Bool]) -> x2) [] x2) ((:) x0 (foldr (\(x7 :: Bool) -> ite Prelude.False (\(x8 :: [Bool]) -> x8) (\(x9 :: [Bool]) -> x9)) [] [x0]))) x0) ((:) Prelude.False ((\(x10 :: [Bool]) -> foldr (\(x11 :: Bool) -> \(x12 :: [Bool] -> Bool -> [Bool]) -> x12) (\(x13 :: [Bool]) -> \(x14 :: Bool) -> x13) [] x10) [Prelude.False] Prelude.True)) [(\(x15 :: [Bool]) -> \(x16 :: [Bool]) -> (\(x17 :: [Bool]) -> Prelude.True) x16) [Prelude.False] (foldr (\(x18 :: Bool) -> (\(x19 :: Bool) -> \(x20 :: [Bool]) -> x20) x18) [Prelude.True] [])]
 -- [True]
 --
