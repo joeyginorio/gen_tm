@@ -144,46 +144,41 @@ type EvalM a = Writer (EvalStats (Sum Int)) (Exp a)
 -- Returned is the result obtained from applying eager evaluation.
 nf :: Exp a -> EvalM a
 nf e@Var {} = pure e
-nf (Lam ty' b) = do
-  scribe (evalStatsNumSteps @(Sum Int)) (Sum 1)
-  Lam ty' . toScope <$> nf (fromScope b)
+nf (Lam ty' b) = Lam ty' . toScope <$> nf (fromScope b)
 nf (f :@ a) = do
-  scribe (evalStatsNumSteps @(Sum Int)) (Sum 1)
   f' <- whnf f
   case f' of
-    Lam _ty b -> nf (instantiate1 a b)
+    Lam _ty b -> do
+      scribe (evalStatsNumSteps @(Sum Int)) (Sum 1)
+      nf (instantiate1 a b)
     _ -> (:@) <$> nf f' <*> nf a
 nf e@Unit = pure e
 nf e@True = pure e
 nf e@False = pure e
-nf (If True t _) = do
-  scribe (evalStatsNumSteps @(Sum Int)) (Sum 1)
-  nf t
-nf (If False _ e) = do
-  scribe (evalStatsNumSteps @(Sum Int)) (Sum 1)
-  nf e
 nf (If c t e) = do
-  scribe (evalStatsNumSteps @(Sum Int)) (Sum 1)
   c' <- whnf c
-  nf $ If c' t e
+  case c' of
+    True -> do
+      scribe (evalStatsNumSteps @(Sum Int)) (Sum 1)
+      nf t
+    False -> do
+      scribe (evalStatsNumSteps @(Sum Int)) (Sum 1)
+      nf e
+    _ -> If <$> nf c' <*> nf t <*> nf e
 nf e@Nil {} = pure e
-nf e@(Cons _ h t) = do
-  scribe (evalStatsNumSteps @(Sum Int)) (Sum 1)
-  h' <- nf h
-  t' <- nf t
-  pure $ e {head = h', tail = t'}
-nf (Foldr _ i Nil {}) = do
-  scribe (evalStatsNumSteps @(Sum Int)) (Sum 1)
-  nf i
-nf (Foldr s i (Cons _ h t)) = do
-  scribe (evalStatsNumSteps @(Sum Int)) (Sum 1)
-  h' <- nf h
-  agg <- nf (Foldr s i t)
-  nf $ s :@ h' :@ agg
+nf (Cons ty' h t) = Cons ty' <$> nf h <*> nf t
 nf (Foldr s i l) = do
-  scribe (evalStatsNumSteps @(Sum Int)) (Sum 1)
   l' <- whnf l
-  nf $ Foldr s i l'
+  case l' of
+    Nil {} -> do
+      scribe (evalStatsNumSteps @(Sum Int)) (Sum 1)
+      nf i
+    Cons _ h t -> do
+      scribe (evalStatsNumSteps @(Sum Int)) (Sum 1)
+      h' <- nf h
+      agg <- nf (Foldr s i t)
+      nf (s :@ h' :@ agg)
+    _ -> Foldr <$> nf s <*> nf i <*> nf l'
 
 -- | Run writer monad to compute the normal form and evaluation statistics of an expression.
 --
@@ -191,10 +186,10 @@ nf (Foldr s i l) = do
 -- (True,EvalStats {_evalStatsNumSteps = 3})
 --
 -- >>> nf' $ If ((:@) (lam TBool 'x' True) False) (lam TBool 'y' True) (lam TBool 'z' (Var 'z'))
--- (Lam {ty = TBool, lamExp = Scope True},EvalStats {_evalStatsNumSteps = 4})
+-- (Lam {ty = TBool, lamExp = Scope True},EvalStats {_evalStatsNumSteps = 2})
 --
 -- >>> nf' $ Foldr (lam TBool 'a' ((:@) (lam TBool 'b' ((:@) (lam (TList TBool) 'f' ((:@) (Foldr (lam TBool 'g' (lam (TArr (TList TBool) (TArr (TList TBool) (TList TBool))) 'h' (Var 'h'))) (lam (TList TBool) 'i' (lam (TList TBool) 'j' (Var 'f'))) (Nil TBool)) (Var 'f'))) (Cons TBool (Var 'a') (Foldr (lam TBool 'c' (If False (lam (TList TBool) 'd' (Var 'd')) (lam (TList TBool) 'e' (Var 'e')))) (Nil TBool) (Cons TBool (Var 'a') (Nil TBool)))))) (Var 'a'))) (Cons TBool False ((:@) ((:@) (lam (TList TBool) 'k' ((:@) (Foldr (lam TBool 'l' (lam (TArr (TList TBool) (TArr TBool (TList TBool))) 'm' (Var 'm'))) (lam (TList TBool) 'n' (lam TBool 'o' (Var 'n'))) (Nil TBool)) (Var 'k'))) (Cons TBool False (Nil TBool))) True)) (Cons TBool ((:@) ((:@) (lam (TList TBool) 's' (lam (TList TBool) 't' ((:@) (lam (TList TBool) 'u' True) (Var 't')))) (Cons TBool False (Nil TBool))) (Foldr (lam TBool 'p' ((:@) (lam TBool 'q' (lam (TList TBool) 'r' (Var 'r'))) (Var 'p'))) (Cons TBool True (Nil TBool)) (Nil TBool))) (Nil TBool))
--- (Cons {ty = TBool, head = True, tail = Nil {ty = TBool}},EvalStats {_evalStatsNumSteps = 23})
+-- (Cons {ty = TBool, head = True, tail = Nil {ty = TBool}},EvalStats {_evalStatsNumSteps = 20})
 --
 -- >>> nf' $ Foldr (lam TBool 'x' (lam TBool 'y' (Var 'y'))) True (Cons TBool True (Cons TBool False (Nil TBool)))
 -- (True,EvalStats {_evalStatsNumSteps = 7})
@@ -213,36 +208,37 @@ whnf :: forall a. Exp a -> EvalM a
 whnf e@Var {} = pure e
 whnf e@Lam {} = pure e
 whnf (f :@ a) = do
-  scribe (evalStatsNumSteps @(Sum Int)) (Sum 1)
   f' <- whnf f
   case f' of
-    Lam _ty b -> whnf (instantiate1 a b)
+    Lam _ty b -> do
+      scribe (evalStatsNumSteps @(Sum Int)) (Sum 1)
+      whnf (instantiate1 a b)
     _ -> pure $ f' :@ a
 whnf e@Unit = pure e
 whnf e@True = pure e
 whnf e@False = pure e
-whnf (If True t _) = do
-  scribe (evalStatsNumSteps @(Sum Int)) (Sum 1)
-  pure t
-whnf (If False _ e) = do
-  scribe (evalStatsNumSteps @(Sum Int)) (Sum 1)
-  pure e
 whnf (If c t e) = do
-  scribe (evalStatsNumSteps @(Sum Int)) (Sum 1)
   c' <- whnf c
-  whnf $ If c' t e
+  case c' of
+    True -> do
+      scribe (evalStatsNumSteps @(Sum Int)) (Sum 1)
+      whnf t
+    False -> do
+      scribe (evalStatsNumSteps @(Sum Int)) (Sum 1)
+      whnf e
+    _ -> pure $ If c' t e
 whnf e@Nil {} = pure e
 whnf e@Cons {} = pure e
-whnf (Foldr _ i Nil {}) = do
-  scribe (evalStatsNumSteps @(Sum Int)) (Sum 1)
-  pure i
-whnf (Foldr s i (Cons _ h t)) = do
-  scribe (evalStatsNumSteps @(Sum Int)) (Sum 1)
-  whnf $ s :@ h :@ Foldr s i t
 whnf (Foldr s i l) = do
-  scribe (evalStatsNumSteps @(Sum Int)) (Sum 1)
   l' <- whnf l
-  whnf $ Foldr s i l'
+  case l' of
+    Nil _ -> do
+      scribe (evalStatsNumSteps @(Sum Int)) (Sum 1)
+      whnf i
+    Cons _ h t -> do
+      scribe (evalStatsNumSteps @(Sum Int)) (Sum 1)
+      whnf $ s :@ h :@ Foldr s i t
+    _ -> pure $ Foldr s i l'
 
 -- | Run writer monad to compute the weak head normal form and evaluation statistics of an expression.
 whnf' :: forall a. Exp a -> (Exp a, EvalStats Int)

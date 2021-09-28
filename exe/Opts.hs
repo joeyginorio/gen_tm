@@ -70,7 +70,7 @@ instance (Barbie.AllBF Aeson.ToJSON f Command) => Aeson.ToJSON (Command f) where
   toJSON = Aeson.genericToJSON commandCustomJSONOptions
   toEncoding = Aeson.genericToEncoding commandCustomJSONOptions
 
-data Language = STLC2 | STLC3
+data Language = STLC2 | STLC3 | STLC3Eager
   deriving stock (Eq, Show, Generic)
   deriving anyclass (Aeson.FromJSON, Aeson.ToJSON)
 
@@ -79,7 +79,8 @@ language =
   Options.str >>= \case
     "stlc2" -> return STLC2
     "stlc3" -> return STLC3
-    (_ :: String) -> Options.readerError "Accepted languages are: stlc2, stlc3"
+    "stlc3eager" -> return STLC3Eager
+    (_ :: String) -> Options.readerError "Accepted languages are: stlc2, stlc3, stlc3eager"
 
 data GenTmConfig f = GenTmConfig
   { genTmConfigOutputFolder :: !(f FilePath),

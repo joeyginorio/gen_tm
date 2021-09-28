@@ -18,7 +18,8 @@ toLCEager STLC3Eager.False = fromJust . closed $ lam "x" (lam "y" (Var "y"))
 toLCEager (STLC3Eager.If c t e) = toLCEager c :@ toLCEager t :@ toLCEager e
 toLCEager STLC3Eager.Nil {} = fromJust . closed $ lam "c" (lam "n" (Var "n"))
 toLCEager (STLC3Eager.Cons _ h t) =
-  let h' = fromJust . closed $ toLCEager h
-      t' = fromJust . closed $ toLCEager t
-   in fromJust . closed $ lam "c" (lam "n" (Var "c" :@ h' :@ t' :@ Var "c" :@ Var "n"))
+  let c' = fromJust . closed $ lam "h" $ lam "t" $ lam "c" $ lam "n" $ Var "c" :@ Var "h" :@ (Var "t" :@ Var "c" :@ Var "n")
+      h' = toLCEager h
+      t' = toLCEager t
+  in c' :@ h' :@ t'
 toLCEager (STLC3Eager.Foldr s i l) = toLCEager l :@ toLCEager s :@ toLCEager i

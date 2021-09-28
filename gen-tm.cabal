@@ -113,6 +113,8 @@ test-suite spec
                   , Language.STLC3Spec
                   , Language.STLC3.ToLC2Spec
                   , Language.LC2.ToLCSpec
+                  , Language.STLC3Eager.ToLCEagerSpec
+                  , Language.STLC3EagerSpec
   build-depends:    QuickCheck
                   , base
                   , bytestring >= 0.10.12.0
@@ -122,7 +124,9 @@ test-suite spec
                   , hedgehog-quickcheck
                   , hspec
                   , hspec-hedgehog
+                  , lifted-async
                   , mmorph
+                  , monad-control
                   , mtl
                   , pipes >= 4.3.16
                   , pipes-bytestring >= 2.1.7

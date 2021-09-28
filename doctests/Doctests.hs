@@ -14,7 +14,7 @@ main = do
           [ flags,
             pkgs,
             maybe [] (\x -> ["-package-db " <> x <> "/package.conf.d"]) libDir,
-            ["-XOverloadedStrings"],
+            ["-XOverloadedStrings", "-XScopedTypeVariables"],
             module_sources
           ]
 

@@ -62,6 +62,10 @@ genTmAndExport config@Opts.GenTmConfig {..} =
         hist :: Dataset.Histogram3 (IntMap Int) <- go
         let hist' = fmap Dataset.toRecords hist
         saveAsJson (runIdentity genTmConfigOutputFolder </> runIdentity genTmConfigOutputHistogramFileName) hist'
+      Opts.STLC3Eager -> do
+        hist :: Dataset.Histogram3Eager (IntMap Int) <- go
+        let hist' = fmap Dataset.toRecords hist
+        saveAsJson (runIdentity genTmConfigOutputFolder </> runIdentity genTmConfigOutputHistogramFileName) hist'
   where
     go :: forall l. Dataset.HasExamples l => P.SafeT IO (Dataset.Histogram l (IntMap Int))
     go =
@@ -81,6 +85,7 @@ genCompAndExport config@Opts.GenCompConfig {..} =
     case runIdentity genCompConfigLanguage of
       Opts.STLC2 -> go @'Opts.STLC2
       Opts.STLC3 -> go @'Opts.STLC3
+      Opts.STLC3Eager -> go @'Opts.STLC3Eager
   where
     go :: forall l. Dataset.HasExamples l => P.SafeT IO ()
     go = do

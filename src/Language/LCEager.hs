@@ -14,7 +14,7 @@
 
 module Language.LCEager where
 
-import Bound (Bound ((>>>=)), Scope, abstract1, fromScope, instantiate1, toScope, (>>>=))
+import Bound (Bound ((>>>=)), Scope, abstract1, fromScope, instantiate1, toScope, (>>>=), Var)
 import Control.Lens (makeLenses, over, scribe, (^.), _2)
 import Control.Monad (ap)
 import Control.Monad.Fresh (Fresh, MonadFresh (fresh), runFreshFrom)
@@ -30,6 +30,7 @@ import Data.Monoid (Sum (..))
 import GHC.Generics (Generic, Generic1)
 import qualified Language.Haskell.TH as TH
 import Prelude hiding (False, True, abs, foldr, head, tail)
+import Data.Aeson (FromJSON, ToJSON)
 
 data Exp a
   = Var a
@@ -40,13 +41,6 @@ data Exp a
 
 infixl 9 :@
 
--- | A smart constructor for Lam
---
--- >>> lam "y" (lam "x" (Var "x" :@ Var "y"))
--- Lam (Scope (Lam (Scope (Var (B ()) :@ Var (F (Var (B ())))))))
-lam :: Eq a => a -> Exp a -> Exp a
-lam v b = Lam (abstract1 v b)
-
 instance Applicative Exp where
   pure = Var
   (<*>) = ap
@@ -56,6 +50,18 @@ instance Monad Exp where
   Var a >>= f = f a
   (x :@ y) >>= f = (x >>= f) :@ (y >>= f)
   Lam e >>= f = Lam (e >>>= f)
+
+instance FromJSON a => FromJSON (Var () (Exp a))
+
+instance FromJSON a => FromJSON (Scope () Exp a)
+
+instance FromJSON a => FromJSON (Exp a)
+
+instance ToJSON a => ToJSON (Var () (Exp a))
+
+instance ToJSON a => ToJSON (Scope () Exp a)
+
+instance ToJSON a => ToJSON (Exp a)
 
 deriveEq1 ''Exp
 deriveOrd1 ''Exp
@@ -69,6 +75,13 @@ instance Ord a => Ord (Exp a) where compare = compare1
 instance Show a => Show (Exp a) where showsPrec = showsPrec1
 
 instance Read a => Read (Exp a) where readsPrec = readsPrec1
+
+-- | A smart constructor for Lam
+--
+-- >>> lam "y" (lam "x" (Var "x" :@ Var "y"))
+-- Lam (Scope (Lam (Scope (Var (B ()) :@ Var (F (Var (B ())))))))
+lam :: Eq a => a -> Exp a -> Exp a
+lam v b = Lam (abstract1 v b)
 
 newtype EvalStats a = EvalStats
   { _evalStatsNumSteps :: a
@@ -91,14 +104,13 @@ type EvalM a = Writer (EvalStats (Sum Int)) (Exp a)
 -- Returned is the result obtained from applying eager evaluation.
 nf :: Exp a -> EvalM a
 nf e@Var {} = pure e
-nf (Lam b) = do
-  scribe (evalStatsNumSteps @(Sum Int)) (Sum 1)
-  Lam . toScope <$> nf (fromScope b)
+nf (Lam b) = Lam . toScope <$> nf (fromScope b)
 nf (f :@ a) = do
-  scribe (evalStatsNumSteps @(Sum Int)) (Sum 1)
   f' <- whnf f
   case f' of
-    Lam b -> nf (instantiate1 a b)
+    Lam b -> do
+      scribe (evalStatsNumSteps @(Sum Int)) (Sum 1)
+      nf (instantiate1 a b)
     _ -> (:@) <$> nf f' <*> nf a
 
 -- | Run writer monad to compute the normal form and evaluation statistics of an expression.
@@ -111,10 +123,11 @@ whnf :: forall a. Exp a -> EvalM a
 whnf e@Var {} = pure e
 whnf e@Lam {} = pure e
 whnf (f :@ a) = do
-  scribe (evalStatsNumSteps @(Sum Int)) (Sum 1)
   f' <- whnf f
   case f' of
-    Lam b -> whnf (instantiate1 a b)
+    Lam b -> do
+      scribe (evalStatsNumSteps @(Sum Int)) (Sum 1)
+      whnf (instantiate1 a b)
     _ -> pure $ f' :@ a
 
 -- | Run writer monad to compute the weak head normal form and evaluation statistics of an expression.
