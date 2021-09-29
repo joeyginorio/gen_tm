@@ -70,7 +70,7 @@ instance (Barbie.AllBF Aeson.ToJSON f Command) => Aeson.ToJSON (Command f) where
   toJSON = Aeson.genericToJSON commandCustomJSONOptions
   toEncoding = Aeson.genericToEncoding commandCustomJSONOptions
 
-data Language = STLC2 | STLC3 | STLC3Eager
+data Language = STLC2 | STLC3 | STLC3Eager | STLC3Lazy
   deriving stock (Eq, Show, Generic)
   deriving anyclass (Aeson.FromJSON, Aeson.ToJSON)
 
@@ -79,8 +79,9 @@ language =
   Options.str >>= \case
     "stlc2" -> return STLC2
     "stlc3" -> return STLC3
-    "stlc3eager" -> return STLC3Eager
-    (_ :: String) -> Options.readerError "Accepted languages are: stlc2, stlc3, stlc3eager"
+    "stlc3-eager" -> return STLC3Eager
+    "stlc3-lazy" -> return STLC3Lazy
+    (_ :: String) -> Options.readerError "Accepted languages are: stlc2, stlc3, stlc3-eager, and stlc3-lazy"
 
 data GenTmConfig f = GenTmConfig
   { genTmConfigOutputFolder :: !(f FilePath),
@@ -293,7 +294,7 @@ command :: Options.Parser (Config Maybe, Maybe FilePath)
 command =
   Options.hsubparser $
     commandOpts "tm" genTmConfigParser "Generate terms"
-      <> commandOpts "comp" genCompConfigParser "Generate compositons of terms"
+      <> commandOpts "comp" genCompConfigParser "Generate compositions of terms"
   where
     commandOpts cmd parser desc = Options.command cmd $ parserInfo parser desc
 

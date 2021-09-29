@@ -8,7 +8,7 @@ import Data.Maybe (fromJust)
 import Language.LCEager (Exp (..), lam)
 import qualified Language.STLC3Eager as STLC3Eager
 
-toLCEager :: forall a. STLC3Eager.Exp a -> Exp a
+toLCEager :: forall k a. STLC3Eager.Exp k a -> Exp k a
 toLCEager (STLC3Eager.Var a) = Var a
 toLCEager (STLC3Eager.Lam _ b) = Lam . toScope . toLCEager . fromScope $ b
 toLCEager (f STLC3Eager.:@ a) = toLCEager f :@ toLCEager a

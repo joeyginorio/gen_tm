@@ -28,6 +28,7 @@ custom-setup
 
 library
   exposed-modules:  Control.Monad.Fresh
+                  , Language.Eagerness
                   , Language.STLC1
                   , Language.STLC2
                   , Language.STLC2.Gen
@@ -62,6 +63,7 @@ library
                   , pipes >= 4.3.16
                   , pipes-bytestring >= 2.1.7
                   , pipes-safe >= 2.3.3
+                  , singletons < 3
                   , template-haskell
                   , text >= 1.2.4.1
                   , transformers

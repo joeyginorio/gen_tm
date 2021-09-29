@@ -45,6 +45,7 @@ import qualified Data.Text as Text
 import GHC.Generics (Generic)
 import qualified Hedgehog.Internal.Gen as Gen
 import qualified Hedgehog.Internal.Seed as Seed
+import Language.Eagerness (Eagerness (..))
 import qualified Language.LC as LC
 import qualified Language.LC2 as LC2
 import qualified Language.LC2.ToLC as LC2
@@ -72,7 +73,9 @@ import qualified System.IO as IO
 class
   ( Monoid (Dataset.Histogram l (IntMap Int)),
     Aeson.ToJSON (Dataset.Example l),
-    Aeson.FromJSON (Dataset.Example l)
+    Aeson.FromJSON (Dataset.Example l),
+    Hashable (Type l),
+    Eq (Type l)
   ) =>
   HasExamples (l :: Language)
   where
@@ -92,6 +95,9 @@ class
 
   -- | Extract a pretty-printed term from an Example.
   prettyTerm :: Lens' (Example l) Text
+
+  -- | Extract a pretty-printed reduced term from an Example.
+  prettyReducedTerm :: Lens' (Example l) Text
 
   -- | Apply a function to a term.
   app :: Term l -> Term l -> Term l
@@ -203,6 +209,7 @@ instance HasExamples 'STLC2 where
      in Example2 {..}
   term = ex2STLC2Term
   prettyTerm = ex2STLC2TermPretty
+  prettyReducedTerm = ex2ReducedSTLC2TermPretty
   app = STLC2.TmApp
   typeCheck tm = either (const Nothing) Just $ runReaderT (STLC2.tyCheck tm) []
   histogram' ex = do
@@ -328,6 +335,7 @@ instance HasExamples 'STLC3 where
      in Example3 {..}
   term = ex3STLC3Term
   prettyTerm = ex3STLC3TermPretty
+  prettyReducedTerm = ex3ReducedSTLC3TermPretty
   app = STLC3.TmApp
   typeCheck tm = either (const Nothing) Just $ runReaderT (STLC3.tyCheck tm) []
   histogram' ex = do
@@ -344,11 +352,11 @@ instance HasExamples 'STLC3 where
 data Example3Eager where
   Example3Eager ::
     { -- | Example type
-      _ex3EagerSTLC3EagerType :: !STLC3Eager.Ty,
+      _ex3EagerSTLC3EagerType :: !(STLC3Eager.Ty 'Eager),
       -- | Pretty-printed example type
       _ex3EagerSTLC3EagerTypePretty :: !Text,
       -- | Example simply-typed lambda calculus term
-      _ex3EagerSTLC3EagerTerm :: !(STLC3Eager.Exp Int),
+      _ex3EagerSTLC3EagerTerm :: !(STLC3Eager.Exp 'Eager Int),
       -- | Term statistics
       _ex3EagerSTLC3EagerTermStats :: !(STLC3Eager.TermStats Int),
       -- | Pretty-printed example simply-typed lambda calculus term
@@ -358,7 +366,7 @@ data Example3Eager where
       -- | Evaluation statistics
       _ex3EagerSTLC3EagerEvalStats :: !(STLC3Eager.EvalStats Int),
       -- | Reduced example simply-typed lambda calculus term
-      _ex3EagerReducedSTLC3EagerTerm :: !(STLC3Eager.Exp Int),
+      _ex3EagerReducedSTLC3EagerTerm :: !(STLC3Eager.Exp 'Eager Int),
       -- | Reduced term statistics
       _ex3EagerReducedSTLC3EagerTermStats :: !(STLC3Eager.TermStats Int),
       -- | Pretty-printed reduced example simply-typed lambda calculus term
@@ -366,7 +374,7 @@ data Example3Eager where
       -- | Pretty-printed reduced example simply-typed lambda calculus term with type signatures
       _ex3EagerReducedSTLC3EagerTermPrettyWithSig :: !Text,
       -- | Example term converted to untyped lambda calculus
-      _ex3EagerLCEagerTerm :: !(LCEager.Exp Int),
+      _ex3EagerLCEagerTerm :: !(LCEager.Exp 'Eager Int),
       -- | Lambda calculus term statistics
       _ex3EagerLCEagerTermStats :: !(LCEager.TermStats Int),
       -- | Pretty-printed example lambda calculus term
@@ -374,7 +382,7 @@ data Example3Eager where
       -- | Lambda calculus evaluation statistics
       _ex3EagerLCEagerEvalStats :: !(LCEager.EvalStats Int),
       -- | Reduced untyped lambda calculus term
-      _ex3EagerReducedLCEagerTerm :: !(LCEager.Exp Int),
+      _ex3EagerReducedLCEagerTerm :: !(LCEager.Exp 'Eager Int),
       -- | Reduced lambda calculus term statistics
       _ex3EagerReducedLCEagerTermStats :: !(LCEager.TermStats Int),
       -- | Pretty-printed reduced untyped lambda calculus term
@@ -407,8 +415,8 @@ makeLenses ''Histogram3Eager
 $(Aeson.deriveJSON Aeson.defaultOptions {Aeson.fieldLabelModifier = drop 11} ''Histogram3Eager)
 
 instance HasExamples 'STLC3Eager where
-  type Type 'STLC3Eager = STLC3Eager.Ty
-  type Term 'STLC3Eager = STLC3Eager.Exp Int
+  type Type 'STLC3Eager = STLC3Eager.Ty 'Eager
+  type Term 'STLC3Eager = STLC3Eager.Exp 'Eager Int
   type Example 'STLC3Eager = Example3Eager
   type Histogram 'STLC3Eager a = Histogram3Eager a
   sample' = STLC3Eager.Sample.sample $ do
@@ -433,6 +441,7 @@ instance HasExamples 'STLC3Eager where
      in Example3Eager {..}
   term = ex3EagerSTLC3EagerTerm
   prettyTerm = ex3EagerSTLC3EagerTermPretty
+  prettyReducedTerm = ex3EagerReducedSTLC3EagerTermPretty
   app = (STLC3Eager.:@)
   typeCheck tm = STLC3Eager.typeCheck' tm
   histogram' ex = do
@@ -442,6 +451,109 @@ instance HasExamples 'STLC3Eager where
     zoom hist3EagerLCEagerTermStats . SS.modify $ LCEager.updateTermHistogram (ex ^. ex3EagerLCEagerTermStats)
     zoom hist3EagerLCEagerEvalStats . SS.modify $ LCEager.updateEvalHistogram (ex ^. ex3EagerLCEagerEvalStats)
     zoom hist3EagerReducedLCEagerTermStats . SS.modify $ LCEager.updateTermHistogram (ex ^. ex3EagerReducedLCEagerTermStats)
+
+data Example3Lazy where
+  Example3Lazy ::
+    { -- | Example type
+      _ex3LazySTLC3LazyType :: !(STLC3Eager.Ty 'Lazy),
+      -- | Pretty-printed example type
+      _ex3LazySTLC3LazyTypePretty :: !Text,
+      -- | Example simply-typed lambda calculus term
+      _ex3LazySTLC3LazyTerm :: !(STLC3Eager.Exp 'Lazy Int),
+      -- | Term statistics
+      _ex3LazySTLC3LazyTermStats :: !(STLC3Eager.TermStats Int),
+      -- | Pretty-printed example simply-typed lambda calculus term
+      _ex3LazySTLC3LazyTermPretty :: !Text,
+      -- | Pretty-printed example simply-typed lambda calculus term with type signatures
+      _ex3LazySTLC3LazyTermPrettyWithSig :: !Text,
+      -- | Evaluation statistics
+      _ex3LazySTLC3LazyEvalStats :: !(STLC3Eager.EvalStats Int),
+      -- | Reduced example simply-typed lambda calculus term
+      _ex3LazyReducedSTLC3LazyTerm :: !(STLC3Eager.Exp 'Lazy Int),
+      -- | Reduced term statistics
+      _ex3LazyReducedSTLC3LazyTermStats :: !(STLC3Eager.TermStats Int),
+      -- | Pretty-printed reduced example simply-typed lambda calculus term
+      _ex3LazyReducedSTLC3LazyTermPretty :: !Text,
+      -- | Pretty-printed reduced example simply-typed lambda calculus term with type signatures
+      _ex3LazyReducedSTLC3LazyTermPrettyWithSig :: !Text,
+      -- | Example term converted to untyped lambda calculus
+      _ex3LazyLCLazyTerm :: !(LCEager.Exp 'Lazy Int),
+      -- | Lambda calculus term statistics
+      _ex3LazyLCLazyTermStats :: !(LCEager.TermStats Int),
+      -- | Pretty-printed example lambda calculus term
+      _ex3LazyLCLazyTermPretty :: !Text,
+      -- | Lambda calculus evaluation statistics
+      _ex3LazyLCLazyEvalStats :: !(LCEager.EvalStats Int),
+      -- | Reduced untyped lambda calculus term
+      _ex3LazyReducedLCLazyTerm :: !(LCEager.Exp 'Lazy Int),
+      -- | Reduced lambda calculus term statistics
+      _ex3LazyReducedLCLazyTermStats :: !(LCEager.TermStats Int),
+      -- | Pretty-printed reduced untyped lambda calculus term
+      _ex3LazyReducedLCLazyTermPretty :: !Text
+    } ->
+    Example3Lazy
+  deriving stock (Show, Eq, Ord, Generic)
+  deriving anyclass (Hashable)
+
+makeLenses ''Example3Lazy
+$(Aeson.deriveJSON Aeson.defaultOptions {Aeson.fieldLabelModifier = drop 8} ''Example3Lazy)
+
+data Histogram3Lazy a = Histogram3Lazy
+  { _hist3LazySTLC3LazyTermStats :: !(STLC3Eager.TermStats a),
+    _hist3LazySTLC3LazyEvalStats :: !(STLC3Eager.EvalStats a),
+    _hist3LazyReducedSTLC3LazyTermStats :: !(STLC3Eager.TermStats a),
+    _hist3LazyLCLazyTermStats :: !(LCEager.TermStats a),
+    _hist3LazyLCLazyEvalStats :: !(LCEager.EvalStats a),
+    _hist3LazyReducedLCLazyTermStats :: !(LCEager.TermStats a)
+  }
+  deriving stock (Show, Eq, Ord, Functor)
+
+instance Semigroup a => Semigroup (Histogram3Lazy a) where
+  Histogram3Lazy a b c d e f <> Histogram3Lazy a' b' c' d' e' f' = Histogram3Lazy (a <> a') (b <> b') (c <> c') (d <> d') (e <> e') (f <> f')
+
+instance Monoid a => Monoid (Histogram3Lazy a) where
+  mempty = Histogram3Lazy mempty mempty mempty mempty mempty mempty
+
+makeLenses ''Histogram3Lazy
+$(Aeson.deriveJSON Aeson.defaultOptions {Aeson.fieldLabelModifier = drop 10} ''Histogram3Lazy)
+
+instance HasExamples 'STLC3Lazy where
+  type Type 'STLC3Lazy = STLC3Eager.Ty 'Lazy
+  type Term 'STLC3Lazy = STLC3Eager.Exp 'Lazy Int
+  type Example 'STLC3Lazy = Example3Lazy
+  type Histogram 'STLC3Lazy a = Histogram3Lazy a
+  sample' = STLC3Eager.Sample.sample $ do
+    stlc3LazyType <- STLC3Eager.Sample.genTy
+    stlc3LazyTerm <- Gen.generalize $ STLC3Eager.Sample.genWellTypedExp stlc3LazyType
+    pure (stlc3LazyType, stlc3LazyTerm)
+  toExample' _ex3LazySTLC3LazyType _ex3LazySTLC3LazyTerm =
+    let _ex3LazySTLC3LazyTermStats = STLC3Eager.countConstructors _ex3LazySTLC3LazyTerm
+        _ex3LazySTLC3LazyTypePretty = Text.pack . STLC3Eager.pprintType $ _ex3LazySTLC3LazyType
+        _ex3LazySTLC3LazyTermPretty = Text.pack . STLC3Eager.pprintTerm $ _ex3LazySTLC3LazyTerm
+        _ex3LazySTLC3LazyTermPrettyWithSig = Text.pack . STLC3Eager.pprintTermWithSig $ _ex3LazySTLC3LazyTerm
+        (_ex3LazyReducedSTLC3LazyTerm, _ex3LazySTLC3LazyEvalStats) = STLC3Eager.whnf' _ex3LazySTLC3LazyTerm
+        _ex3LazyReducedSTLC3LazyTermStats = STLC3Eager.countConstructors _ex3LazyReducedSTLC3LazyTerm
+        _ex3LazyReducedSTLC3LazyTermPretty = Text.pack . STLC3Eager.pprintTerm $ _ex3LazyReducedSTLC3LazyTerm
+        _ex3LazyReducedSTLC3LazyTermPrettyWithSig = Text.pack . STLC3Eager.pprintTermWithSig $ _ex3LazyReducedSTLC3LazyTerm
+        _ex3LazyLCLazyTerm = STLC3Eager.toLCEager _ex3LazySTLC3LazyTerm
+        _ex3LazyLCLazyTermStats = LCEager.countConstructors _ex3LazyLCLazyTerm
+        _ex3LazyLCLazyTermPretty = Text.pack . LCEager.pprintTerm $ _ex3LazyLCLazyTerm
+        (_ex3LazyReducedLCLazyTerm, _ex3LazyLCLazyEvalStats) = LCEager.whnf' _ex3LazyLCLazyTerm
+        _ex3LazyReducedLCLazyTermStats = LCEager.countConstructors _ex3LazyReducedLCLazyTerm
+        _ex3LazyReducedLCLazyTermPretty = Text.pack . LCEager.pprintTerm $ _ex3LazyReducedLCLazyTerm
+     in Example3Lazy {..}
+  term = ex3LazySTLC3LazyTerm
+  prettyTerm = ex3LazySTLC3LazyTermPretty
+  prettyReducedTerm = ex3LazyReducedSTLC3LazyTermPretty
+  app = (STLC3Eager.:@)
+  typeCheck tm = STLC3Eager.typeCheck' tm
+  histogram' ex = do
+    zoom hist3LazySTLC3LazyTermStats . SS.modify $ STLC3Eager.updateTermHistogram (ex ^. ex3LazySTLC3LazyTermStats)
+    zoom hist3LazySTLC3LazyEvalStats . SS.modify $ STLC3Eager.updateEvalHistogram (ex ^. ex3LazySTLC3LazyEvalStats)
+    zoom hist3LazyReducedSTLC3LazyTermStats . SS.modify $ STLC3Eager.updateTermHistogram (ex ^. ex3LazyReducedSTLC3LazyTermStats)
+    zoom hist3LazyLCLazyTermStats . SS.modify $ LCEager.updateTermHistogram (ex ^. ex3LazyLCLazyTermStats)
+    zoom hist3LazyLCLazyEvalStats . SS.modify $ LCEager.updateEvalHistogram (ex ^. ex3LazyLCLazyEvalStats)
+    zoom hist3LazyReducedLCLazyTermStats . SS.modify $ LCEager.updateTermHistogram (ex ^. ex3LazyReducedLCLazyTermStats)
 
 -- | Deduplicate the examples.
 deduplicate :: forall m r a v. (Monad m, Eq a, Hashable a) => HashSet a -> (v -> a) -> P.Pipe v v m r
@@ -460,7 +572,7 @@ cache f = P.for P.cat $ \ex -> do
   SL.modify (HashMap.insert (f ex) ex)
 
 -- | Produce compositional examples.
-compositions :: forall m a l. (Monad m, Eq a, Hashable a, HasExamples l) => HashMap a (Example l) -> Maybe (HashSet a) -> P.Producer (Example l) m ()
+compositions :: forall m a l. (Monad m, Eq a, Hashable a, HasExamples l) => HashMap a (Example l) -> Maybe (HashSet a) -> P.Producer (Type l, Term l) m ()
 compositions examples keys =
   forEachExample $ \ex -> do
     let tm = ex ^. term
@@ -469,7 +581,7 @@ compositions examples keys =
           comp = app tm tm'
       case typeCheck comp of
         Nothing -> pure ()
-        Just ty -> P.yield $ toExample' ty comp
+        Just ty -> P.yield (ty, comp)
   where
     filteredExamples = case keys of
       Nothing -> examples

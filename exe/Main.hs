@@ -9,7 +9,7 @@
 
 module Main where
 
-import Control.Lens ((^.))
+import Control.Lens ((^.), _1)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Aeson (ToJSON (toEncoding))
 import Data.Aeson.Encoding (encodingToLazyByteString)
@@ -66,6 +66,10 @@ genTmAndExport config@Opts.GenTmConfig {..} =
         hist :: Dataset.Histogram3Eager (IntMap Int) <- go
         let hist' = fmap Dataset.toRecords hist
         saveAsJson (runIdentity genTmConfigOutputFolder </> runIdentity genTmConfigOutputHistogramFileName) hist'
+      Opts.STLC3Lazy -> do
+        hist :: Dataset.Histogram3Eager (IntMap Int) <- go
+        let hist' = fmap Dataset.toRecords hist
+        saveAsJson (runIdentity genTmConfigOutputFolder </> runIdentity genTmConfigOutputHistogramFileName) hist'
   where
     go :: forall l. Dataset.HasExamples l => P.SafeT IO (Dataset.Histogram l (IntMap Int))
     go =
@@ -86,6 +90,7 @@ genCompAndExport config@Opts.GenCompConfig {..} =
       Opts.STLC2 -> go @'Opts.STLC2
       Opts.STLC3 -> go @'Opts.STLC3
       Opts.STLC3Eager -> go @'Opts.STLC3Eager
+      Opts.STLC3Lazy -> go @'Opts.STLC3Lazy
   where
     go :: forall l. Dataset.HasExamples l => P.SafeT IO ()
     go = do
@@ -105,6 +110,8 @@ genCompAndExport config@Opts.GenCompConfig {..} =
         Nothing -> "Skipped reading keys."
       P.runEffect $
         Dataset.compositions examples (HashMap.keysSet <$> keys)
+          >-> Dataset.deduplicate HashSet.empty (^. _1)
+          >-> Dataset.toExample
           >-> Dataset.deduplicate (HashMap.keysSet examples) (^. Dataset.prettyTerm)
           >-> P.take (runIdentity genCompConfigNumberOfExampes)
           >-> P.tee (showProgress $ runIdentity genCompConfigNumberOfExampes)

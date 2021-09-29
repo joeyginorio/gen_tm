@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
@@ -5,12 +6,15 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneKindSignatures #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE NoStarIsType #-}
 
 module Language.STLC3Eager where
 
@@ -28,32 +32,36 @@ import Data.Hashable (Hashable)
 import Data.Hashable.Lifted (Hashable1)
 import Data.IntMap.Strict (IntMap)
 import qualified Data.IntMap.Strict as IntMap
+import Data.Kind (Type)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Monoid (Sum (..))
 import GHC.Generics (Generic, Generic1)
+import Language.Eagerness (Eagerness (..))
 import qualified Language.Haskell.TH as TH
 import Prelude hiding (False, True, head, tail)
 
-data Ty
+type Ty :: Eagerness -> Type
+data Ty k
   = -- | Arrow type (functions).
-    TArr Ty Ty
+    TArr (Ty k) (Ty k)
   | -- | Unit type.
     TUnit
   | -- | Bool type.
     TBool
   | -- | List type.
-    TList Ty
+    TList (Ty k)
   deriving stock (Eq, Ord, Show, Read, Generic)
   deriving anyclass (Hashable)
 
-data Exp a
+type Exp :: Eagerness -> Type -> Type
+data Exp k a
   = -- | Variable.
     Var a
   | -- | Lambda abstraction.
-    Lam {ty :: Ty, lamExp :: Scope () Exp a}
+    Lam {ty :: Ty k, lamExp :: Scope () (Exp k) a}
   | -- | Term application.
-    (:@) {function :: Exp a, argument :: Exp a}
+    (:@) {function :: Exp k a, argument :: Exp k a}
   | -- | Unit
     Unit
   | -- | True.
@@ -61,23 +69,23 @@ data Exp a
   | -- | False.
     False
   | -- | If-then-else.
-    If {condition :: Exp a, thenExp :: Exp a, elseExp :: Exp a}
+    If {condition :: Exp k a, thenExp :: Exp k a, elseExp :: Exp k a}
   | -- | Nil.
-    Nil {ty :: Ty}
+    Nil {ty :: Ty k}
   | -- | Cons.
-    Cons {ty :: Ty, head :: Exp a, tail :: Exp a}
+    Cons {ty :: Ty k, head :: Exp k a, tail :: Exp k a}
   | -- | Right fold.
-    Foldr {step :: Exp a, initial :: Exp a, list :: Exp a}
+    Foldr {step :: Exp k a, initial :: Exp k a, list :: Exp k a}
   deriving stock (Functor, Foldable, Traversable, Generic, Generic1)
   deriving anyclass (Hashable, Hashable1)
 
 infixl 9 :@
 
-instance Applicative Exp where
+instance Applicative (Exp k) where
   pure = Var
   (<*>) = ap
 
-instance Monad Exp where
+instance Monad (Exp k) where
   return = Var
   Var a >>= f = f a
   (x :@ y) >>= f = (x >>= f) :@ (y >>= f)
@@ -90,37 +98,37 @@ instance Monad Exp where
   Cons ty' h t >>= f = Cons ty' (h >>= f) (t >>= f)
   Foldr s i l >>= f = Foldr (s >>= f) (i >>= f) (l >>= f)
 
-instance FromJSON Ty
+instance FromJSON (Ty k)
 
-instance FromJSON a => FromJSON (Var () (Exp a))
+instance FromJSON a => FromJSON (Var () (Exp k a))
 
-instance FromJSON a => FromJSON (Scope () Exp a)
+instance FromJSON a => FromJSON (Scope () (Exp k) a)
 
-instance FromJSON a => FromJSON (Exp a)
+instance FromJSON a => FromJSON (Exp k a)
 
-instance ToJSON Ty
+instance ToJSON (Ty k)
 
-instance ToJSON a => ToJSON (Var () (Exp a))
+instance ToJSON a => ToJSON (Var () (Exp k a))
 
-instance ToJSON a => ToJSON (Scope () Exp a)
+instance ToJSON a => ToJSON (Scope () (Exp k) a)
 
-instance ToJSON a => ToJSON (Exp a)
+instance ToJSON a => ToJSON (Exp k a)
 
 deriveEq1 ''Exp
 deriveOrd1 ''Exp
 deriveRead1 ''Exp
 deriveShow1 ''Exp
 
-instance Eq a => Eq (Exp a) where (==) = eq1
+instance Eq a => Eq (Exp k a) where (==) = eq1
 
-instance Ord a => Ord (Exp a) where compare = compare1
+instance Ord a => Ord (Exp k a) where compare = compare1
 
-instance Show a => Show (Exp a) where showsPrec = showsPrec1
+instance Show a => Show (Exp k a) where showsPrec = showsPrec1
 
-instance Read a => Read (Exp a) where readsPrec = readsPrec1
+instance Read a => Read (Exp k a) where readsPrec = readsPrec1
 
 -- | Smart constructor for lambda terms
-lam :: forall a. Eq a => Ty -> a -> Exp a -> Exp a
+lam :: forall k a. Eq a => Ty k -> a -> Exp k a -> Exp k a
 lam ty' uname bind = Lam ty' (abstract1 uname bind)
 
 newtype EvalStats a = EvalStats
@@ -138,11 +146,11 @@ instance Monoid a => Monoid (EvalStats a) where
 makeLenses ''EvalStats
 $(deriveJSON defaultOptions {fieldLabelModifier = drop 10} ''EvalStats)
 
-type EvalM a = Writer (EvalStats (Sum Int)) (Exp a)
+type EvalM k a = Writer (EvalStats (Sum Int)) (Exp k a)
 
 -- | Compute the normal form of an expression.
 -- Returned is the result obtained from applying eager evaluation.
-nf :: Exp a -> EvalM a
+nf :: Exp 'Eager a -> EvalM 'Eager a
 nf e@Var {} = pure e
 nf (Lam ty' b) = Lam ty' . toScope <$> nf (fromScope b)
 nf (f :@ a) = do
@@ -199,12 +207,12 @@ nf (Foldr s i l) = do
 --
 -- >>> let or = lam TBool 'x' (lam TBool 'y' (If (Var 'x') (Var 'x') (Var 'y'))) in nf' $ Foldr or True (Cons TBool True (Cons TBool True (Cons TBool False (Nil TBool))))
 -- (True,EvalStats {_evalStatsNumSteps = 13})
-nf' :: forall a. Exp a -> (Exp a, EvalStats Int)
+nf' :: forall a. Exp 'Eager a -> (Exp 'Eager a, EvalStats Int)
 nf' = over _2 (fmap getSum) . runWriter . nf
 
 -- | Reduce a term to weak head normal form.
 -- Returned is the result obtained from applying lazy evaluation.
-whnf :: forall a. Exp a -> EvalM a
+whnf :: forall k a. Exp k a -> EvalM k a
 whnf e@Var {} = pure e
 whnf e@Lam {} = pure e
 whnf (f :@ a) = do
@@ -241,18 +249,18 @@ whnf (Foldr s i l) = do
     _ -> pure $ Foldr s i l'
 
 -- | Run writer monad to compute the weak head normal form and evaluation statistics of an expression.
-whnf' :: forall a. Exp a -> (Exp a, EvalStats Int)
+whnf' :: forall k a. Exp k a -> (Exp k a, EvalStats Int)
 whnf' = over _2 (fmap getSum) . runWriter . whnf
 
 -- | Monad stack for type checking.
 type TyM a = MaybeT (Fresh a)
 
 -- | Guard against a type error.
-assertTy :: Ord a => Map a Ty -> Exp a -> Ty -> TyM a ()
+assertTy :: forall k a. Ord a => Map a (Ty k) -> Exp k a -> Ty k -> TyM a ()
 assertTy env e t = typeCheck env e >>= guard . (== t)
 
 -- | Check the type of an expression.
-typeCheck :: forall a. Ord a => Map a Ty -> Exp a -> TyM a Ty
+typeCheck :: forall k a. Ord a => Map a (Ty k) -> Exp k a -> TyM a (Ty k)
 typeCheck env (Var a) = MaybeT . return $ Map.lookup a env
 typeCheck env (f :@ a) =
   typeCheck env f >>= \case
@@ -289,7 +297,7 @@ typeCheck env (Foldr s i l) =
 --
 -- >>> typeCheck' $ Foldr (lam TBool 'a' ((:@) (lam TBool 'b' ((:@) (lam (TList TBool) 'f' ((:@) (Foldr (lam TBool 'g' (lam (TArr (TList TBool) (TArr (TList TBool) (TList TBool))) 'h' (Var 'h'))) (lam (TList TBool) 'i' (lam (TList TBool) 'j' (Var 'f'))) (Nil TBool)) (Var 'f'))) (Cons TBool (Var 'a') (Foldr (lam TBool 'c' (If False (lam (TList TBool) 'd' (Var 'd')) (lam (TList TBool) 'e' (Var 'e')))) (Nil TBool) (Cons TBool (Var 'a') (Nil TBool)))))) (Var 'a'))) (Cons TBool False ((:@) ((:@) (lam (TList TBool) 'k' ((:@) (Foldr (lam TBool 'l' (lam (TArr (TList TBool) (TArr TBool (TList TBool))) 'm' (Var 'm'))) (lam (TList TBool) 'n' (lam TBool 'o' (Var 'n'))) (Nil TBool)) (Var 'k'))) (Cons TBool False (Nil TBool))) True)) (Cons TBool ((:@) ((:@) (lam (TList TBool) 's' (lam (TList TBool) 't' ((:@) (lam (TList TBool) 'u' True) (Var 't')))) (Cons TBool False (Nil TBool))) (Foldr (lam TBool 'p' ((:@) (lam TBool 'q' (lam (TList TBool) 'r' (Var 'r'))) (Var 'p'))) (Cons TBool True (Nil TBool)) (Nil TBool))) (Nil TBool))
 -- Just (TList TBool)
-typeCheck' :: forall a. (Ord a, Enum a) => Exp a -> Maybe Ty
+typeCheck' :: forall k a. (Ord a, Enum a) => Exp k a -> Maybe (Ty k)
 typeCheck' = runFresh . runMaybeT . typeCheck Map.empty
 
 updateEvalHistogram :: EvalStats Int -> EvalStats (IntMap Int) -> EvalStats (IntMap Int)
@@ -311,10 +319,10 @@ instance Monoid a => Monoid (TermStats a) where
 makeLenses ''TermStats
 $(deriveJSON defaultOptions {fieldLabelModifier = drop 10} ''TermStats)
 
-countConstructors :: forall a. Exp a -> TermStats Int
+countConstructors :: forall k a. Exp k a -> TermStats Int
 countConstructors = fmap getSum . execWriter . go
   where
-    go :: forall a'. Exp a' -> Writer (TermStats (Sum Int)) ()
+    go :: forall a'. Exp k a' -> Writer (TermStats (Sum Int)) ()
     go Unit = scribe (termStatsNumNode @(Sum Int)) (Sum 1)
     go True = scribe (termStatsNumNode @(Sum Int)) (Sum 1)
     go False = scribe (termStatsNumNode @(Sum Int)) (Sum 1)
@@ -349,14 +357,14 @@ updateTermHistogram stats =
 type TyTH a = Fresh a TH.Exp
 
 -- | Convert a term to a Template Haskell expression
-toTHExp :: forall a. Enum a => a -> Exp a -> TH.Exp
+toTHExp :: forall k a. Enum a => a -> Exp k a -> TH.Exp
 toTHExp = toTHExp' (\name _ -> TH.VarP name)
 
 -- | Convert a term to a Template Haskell expression with type signature
-toTHExpWithSig :: forall a. Enum a => a -> Exp a -> TH.Exp
+toTHExpWithSig :: forall k a. Enum a => a -> Exp k a -> TH.Exp
 toTHExpWithSig = toTHExp' (\name ty' -> TH.SigP (TH.VarP name) (toTHType ty'))
 
-toTHExp' :: forall a. Enum a => (TH.Name -> Ty -> TH.Pat) -> a -> Exp a -> TH.Exp
+toTHExp' :: forall k a. Enum a => (TH.Name -> Ty k -> TH.Pat) -> a -> Exp k a -> TH.Exp
 toTHExp' varP a e = runFreshFrom a $ go e
   where
     toName a' = TH.mkName $ "x" <> (show . fromEnum $ a')
@@ -368,7 +376,7 @@ toTHExp' varP a e = runFreshFrom a $ go e
     cons = TH.mkName ":"
     foldr' = TH.mkName "foldr"
 
-    go :: Exp a -> TyTH a
+    go :: Exp k a -> TyTH a
     go (Var a') = pure . TH.VarE $ toName a'
     go (f :@ a') = TH.AppE <$> go f <*> go a'
     go (Lam ty' bind) = do
@@ -386,14 +394,11 @@ toTHExp' varP a e = runFreshFrom a $ go e
       return $ TH.AppE (TH.AppE (TH.AppE (TH.VarE ite) c') t') e''
     go (Nil _ty) = return $ TH.ListE []
     go (Cons _ty h t) = do
+      h' <- go h
       t' <- go t
       case t' of
-        TH.ListE exps -> do
-          h' <- go h
-          return $ TH.ListE $ (:) h' exps
-        _ -> do
-          h' <- go h
-          return $ TH.AppE (TH.AppE (TH.ConE cons) h') t'
+        TH.ListE exps -> return $ TH.ListE $ (:) h' exps
+        _ -> return $ TH.AppE (TH.AppE (TH.ConE cons) h') t'
     go (Foldr s i l) = do
       s' <- go s
       i' <- go i
@@ -401,13 +406,16 @@ toTHExp' varP a e = runFreshFrom a $ go e
       return $ TH.AppE (TH.AppE (TH.AppE (TH.VarE foldr') s') i') l'
 
 -- | Convert a type to a Template Haskell type
-toTHType :: Ty -> TH.Type
+toTHType :: forall k. Ty k -> TH.Type
 toTHType TUnit = TH.TupleT 0
 toTHType TBool = TH.ConT (TH.mkName "Bool")
 toTHType (TArr ty' ty'') = TH.AppT (TH.AppT TH.ArrowT (toTHType ty')) (toTHType ty'')
 toTHType (TList ty') = TH.AppT TH.ListT (toTHType ty')
 
 -- | Pretty-print a term using Haskell syntax
+--
+-- >>> pprintTerm $ Cons (TArr TBool TBool) (lam TBool 'x' True) (Cons (TArr TBool TBool) (lam TBool 'x' False) (Nil TBool))
+-- "[\\x0 -> True, \\x1 -> False]"
 --
 -- >>> pprintTerm $ (:@) (lam TBool 'x' (Var 'x')) ((:@) (lam TBool 'y' (Var 'y')) ((:@) (lam TBool 'z' (Var 'z')) True))
 -- "(\\x0 -> x0) ((\\x1 -> x1) ((\\x2 -> x2) True))"
@@ -429,7 +437,7 @@ toTHType (TList ty') = TH.AppT TH.ListT (toTHType ty')
 --
 -- >>> pprintTerm $ (:@) (lam (TList TBool) 'c' ((:@) (lam (TList TBool) 'd' Unit) (Var 'c'))) (Cons TBool (Foldr (lam TBool 'a' (lam TBool 'b' (Var 'b'))) True (Cons TBool True (Cons TBool True (Nil TBool)))) (Nil TBool))
 -- "(\\x0 -> (\\x1 -> ()) x0) [foldr (\\x2 -> \\x3 -> x3) True [True, True]]"
-pprintTerm :: forall a. Enum a => Exp a -> String
+pprintTerm :: forall k a. Enum a => Exp k a -> String
 pprintTerm = unwords . words . TH.pprint . toTHExp (toEnum 0)
 
 -- | Pretty-print a term with type signuatures using Haskell syntax
@@ -454,8 +462,8 @@ pprintTerm = unwords . words . TH.pprint . toTHExp (toEnum 0)
 --
 -- >>> pprintTermWithSig $ (:@) (lam (TList TBool) 'c' ((:@) (lam (TList TBool) 'd' Unit) (Var 'c'))) (Cons TBool (Foldr (lam TBool 'a' (lam TBool 'b' (Var 'b'))) True (Cons TBool True (Cons TBool True (Nil TBool)))) (Nil TBool))
 -- "(\\(x0 :: [Bool]) -> (\\(x1 :: [Bool]) -> ()) x0) [foldr (\\(x2 :: Bool) -> \\(x3 :: Bool) -> x3) True [True, True]]"
-pprintTermWithSig :: forall a. Enum a => Exp a -> String
+pprintTermWithSig :: forall k a. Enum a => Exp k a -> String
 pprintTermWithSig = unwords . words . TH.pprint . toTHExpWithSig (toEnum 0)
 
-pprintType :: Ty -> String
+pprintType :: forall k. Ty k -> String
 pprintType = unwords . words . TH.pprint . toTHType
