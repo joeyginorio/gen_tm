@@ -90,7 +90,10 @@ data GenTmConfig f = GenTmConfig
     genTmConfigOutputConfigFileName :: !(f FilePath),
     genTmConfigNumberOfExampes :: !(f Int),
     genTmConfigSeed :: !(f Gen.Seed),
-    genTmConfigLanguage :: !(f Language)
+    genTmConfigLanguage :: !(f Language),
+    genTmConfigTokenizer :: !(f FilePath),
+    genTmConfigMaxInputTokens :: !(f Int),
+    genTmConfigMaxOutputTokens :: !(f Int)
   }
   deriving stock (Generic)
   deriving anyclass (Barbie.FunctorB, Barbie.TraversableB, Barbie.ApplicativeB, Barbie.ConstraintsB)
@@ -123,7 +126,10 @@ data GenCompConfig f = GenCompConfig
     genCompConfigInputDataFileName :: !(f FilePath),
     genCompConfigInputTrainingDataCSVFile :: !(f (Maybe FilePath)),
     genCompConfigNumberOfExampes :: !(f Int),
-    genCompConfigLanguage :: !(f Language)
+    genCompConfigLanguage :: !(f Language),
+    genCompConfigTokenizer :: !(f FilePath),
+    genCompConfigMaxInputTokens :: !(f Int),
+    genCompConfigMaxOutputTokens :: !(f Int)
   }
   deriving stock (Generic)
   deriving anyclass (Barbie.FunctorB, Barbie.TraversableB, Barbie.ApplicativeB, Barbie.ConstraintsB)
@@ -213,7 +219,25 @@ genTmConfigParser = Barbie.bmap (Compose . optional) parser
                 Options.long "language"
                   <> Options.short 'l'
                   <> Options.metavar "LANGUAGE"
-                  <> Options.help "Language (stlc2, stlc3)"
+                  <> Options.help "Language (stlc2, stlc3, stlc3-eager, stlc3-lazy)",
+            genTmConfigTokenizer =
+              Options.strOption $
+                Options.long "tokenizer"
+                  <> Options.short 'T'
+                  <> Options.metavar "TOKENIZER"
+                  <> Options.help "Tokenizer",
+            genTmConfigMaxInputTokens =
+              Options.option Options.auto $
+                Options.long "max-input-tokens"
+                  <> Options.short 'm'
+                  <> Options.metavar "MAX_INPUT_TOKENS"
+                  <> Options.help "Max input tokens",
+            genTmConfigMaxOutputTokens =
+              Options.option Options.auto $
+                Options.long "max-output-tokens"
+                  <> Options.short 'M'
+                  <> Options.metavar "MAX_OUTPUT_TOKENS"
+                  <> Options.help "Max output tokens"
           }
 
 genCompConfigParser :: Config (Options.Parser `Compose` Maybe)
@@ -269,7 +293,25 @@ genCompConfigParser = Barbie.bmap (Compose . optional) parser
                 Options.long "language"
                   <> Options.short 'l'
                   <> Options.metavar "LANGUAGE"
-                  <> Options.help "Language (stlc2, stlc3)"
+                  <> Options.help "Language (stlc2, stlc3, stlc3-eager, stlc3-lazy)",
+            genCompConfigTokenizer =
+              Options.strOption $
+                Options.long "tokenizer"
+                  <> Options.short 'T'
+                  <> Options.metavar "TOKENIZER"
+                  <> Options.help "Tokenizer",
+            genCompConfigMaxInputTokens =
+              Options.option Options.auto $
+                Options.long "max-input-tokens"
+                  <> Options.short 'm'
+                  <> Options.metavar "MAX_INPUT_TOKENS"
+                  <> Options.help "Max input tokens",
+            genCompConfigMaxOutputTokens =
+              Options.option Options.auto $
+                Options.long "max-output-tokens"
+                  <> Options.short 'M'
+                  <> Options.metavar "MAX_OUTPUT_TOKENS"
+                  <> Options.help "Max output tokens"
           }
 
 parserInfo ::
@@ -314,7 +356,10 @@ genTmConfigErrors =
       genTmConfigOutputConfigFileName = "output config file name",
       genTmConfigNumberOfExampes = "number of examples",
       genTmConfigSeed = "seed",
-      genTmConfigLanguage = "language"
+      genTmConfigLanguage = "language",
+      genTmConfigTokenizer = "tokenizer",
+      genTmConfigMaxInputTokens = "max input tokens",
+      genTmConfigMaxOutputTokens = "max output tokens"
     }
 
 genCompConfigErrors :: GenCompConfig (Const String)
@@ -327,7 +372,10 @@ genCompConfigErrors =
       genCompConfigInputDataFileName = "input data file name",
       genCompConfigInputTrainingDataCSVFile = "input training data CSV file",
       genCompConfigNumberOfExampes = "number of examples",
-      genCompConfigLanguage = "language"
+      genCompConfigLanguage = "language",
+      genCompConfigTokenizer = "tokenizer",
+      genCompConfigMaxInputTokens = "max input tokens",
+      genCompConfigMaxOutputTokens = "max output tokens"
     }
 
 validate ::

@@ -98,6 +98,7 @@ executable gen-tm
                   , pipes-bytestring >= 2.1.7
                   , pipes-safe >= 2.3.3
                   , pipes-csv
+                  , SafeSemaphore
                   , terminal-progress-bar
                   , text
                   , tokenizers

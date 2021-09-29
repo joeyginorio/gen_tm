@@ -9,6 +9,7 @@
 
 module Main where
 
+import qualified Control.Concurrent.MSem as MSem
 import Control.Lens ((^.), _1)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Aeson (ToJSON (toEncoding))
@@ -37,6 +38,7 @@ import qualified System.Console.ANSI.Codes as ANSI
 import System.FilePath ((</>))
 import qualified System.IO as IO
 import qualified System.ProgressBar as PB
+import qualified Tokenizers
 
 main :: IO ()
 main = do
@@ -51,31 +53,38 @@ main = do
 
 genTmAndExport :: Opts.GenTmConfig Identity -> IO ()
 genTmAndExport config@Opts.GenTmConfig {..} =
-  P.runSafeT $ do
-    saveAsJson (runIdentity genTmConfigOutputFolder </> runIdentity genTmConfigOutputConfigFileName) (Opts.Config . Opts.Tm $ config)
-    case runIdentity genTmConfigLanguage of
-      Opts.STLC2 -> do
-        hist :: Dataset.Histogram2 (IntMap Int) <- go
-        let hist' = fmap Dataset.toRecords hist
-        saveAsJson (runIdentity genTmConfigOutputFolder </> runIdentity genTmConfigOutputHistogramFileName) hist'
-      Opts.STLC3 -> do
-        hist :: Dataset.Histogram3 (IntMap Int) <- go
-        let hist' = fmap Dataset.toRecords hist
-        saveAsJson (runIdentity genTmConfigOutputFolder </> runIdentity genTmConfigOutputHistogramFileName) hist'
-      Opts.STLC3Eager -> do
-        hist :: Dataset.Histogram3Eager (IntMap Int) <- go
-        let hist' = fmap Dataset.toRecords hist
-        saveAsJson (runIdentity genTmConfigOutputFolder </> runIdentity genTmConfigOutputHistogramFileName) hist'
-      Opts.STLC3Lazy -> do
-        hist :: Dataset.Histogram3Eager (IntMap Int) <- go
-        let hist' = fmap Dataset.toRecords hist
-        saveAsJson (runIdentity genTmConfigOutputFolder </> runIdentity genTmConfigOutputHistogramFileName) hist'
+  Tokenizers.withTokenizerFromConfigFile (runIdentity genTmConfigTokenizer) $ \tokenizer -> do
+    tokenizerSem <- MSem.new (1 :: Int)
+    let tokenize input = MSem.with tokenizerSem $ do
+          encoding <- Tokenizers.encode tokenizer input
+          Tokenizers.getIDs encoding
+    P.runSafeT $ do
+      saveAsJson (runIdentity genTmConfigOutputFolder </> runIdentity genTmConfigOutputConfigFileName) (Opts.Config . Opts.Tm $ config)
+      case runIdentity genTmConfigLanguage of
+        Opts.STLC2 -> do
+          hist :: Dataset.Histogram2 (IntMap Int) <- go tokenize
+          let hist' = fmap Dataset.toRecords hist
+          saveAsJson (runIdentity genTmConfigOutputFolder </> runIdentity genTmConfigOutputHistogramFileName) hist'
+        Opts.STLC3 -> do
+          hist :: Dataset.Histogram3 (IntMap Int) <- go tokenize
+          let hist' = fmap Dataset.toRecords hist
+          saveAsJson (runIdentity genTmConfigOutputFolder </> runIdentity genTmConfigOutputHistogramFileName) hist'
+        Opts.STLC3Eager -> do
+          hist :: Dataset.Histogram3Eager (IntMap Int) <- go tokenize
+          let hist' = fmap Dataset.toRecords hist
+          saveAsJson (runIdentity genTmConfigOutputFolder </> runIdentity genTmConfigOutputHistogramFileName) hist'
+        Opts.STLC3Lazy -> do
+          hist :: Dataset.Histogram3Lazy (IntMap Int) <- go tokenize
+          let hist' = fmap Dataset.toRecords hist
+          saveAsJson (runIdentity genTmConfigOutputFolder </> runIdentity genTmConfigOutputHistogramFileName) hist'
   where
-    go :: forall l. Dataset.HasExamples l => P.SafeT IO (Dataset.Histogram l (IntMap Int))
-    go =
+    go :: forall l. Dataset.HasExamples l => Dataset.Tokenize -> P.SafeT IO (Dataset.Histogram l (IntMap Int))
+    go tokenize =
       P.runEffect . P.execStateP mempty $
         Dataset.sample (runIdentity genTmConfigSeed)
           >-> Dataset.toExample
+          >-> Dataset.filterByMaxTokens tokenize (runIdentity genTmConfigMaxInputTokens) Dataset.prettyTerms
+          >-> Dataset.filterByMaxTokens tokenize (runIdentity genTmConfigMaxOutputTokens) Dataset.prettyReducedTerms
           >-> Dataset.deduplicate HashSet.empty (^. Dataset.prettyTerm)
           >-> P.take (runIdentity genTmConfigNumberOfExampes)
           >-> P.tee (showProgress $ runIdentity genTmConfigNumberOfExampes)
