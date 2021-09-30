@@ -18,7 +18,7 @@ prop_commutative =
           STLC3.TyUnit -> True
           STLC3.TyBool -> True
           STLC3.TyFun _ _ -> True
-          STLC3.TyBList -> False
+          STLC3.TyList _ -> True
       )
     tm <- forAll (STLC3.Sample.genWellTypedExp ty)
     let tm' = STLC3.eval' tm

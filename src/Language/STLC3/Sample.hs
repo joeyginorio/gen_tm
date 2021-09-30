@@ -35,10 +35,10 @@ genTy =
     Gen.choice
     [ -- non-recursive generators
       pure STLC3.TyUnit,
-      pure STLC3.TyBool,
-      pure STLC3.TyBList
+      pure STLC3.TyBool
     ]
     [ -- recursive generators
+      STLC3.TyList <$> genTy,
       STLC3.TyFun <$> genTy <*> genTy
     ]
 
@@ -68,7 +68,7 @@ shrinkExp (STLC3.TmApp f a) = fst . flip runReader STLC3.ids . runWriterT $ do
   case f' of
     STLC3.TmFun var _ b -> (: []) <$> (STLC3.subst var a b >>= STLC3.eval)
     _ -> pure []
-shrinkExp (STLC3.TmCons _ t) = [t]
+shrinkExp (STLC3.TmCons _ _ t) = [t]
 shrinkExp _ = []
 
 genWellTypedExp'' :: STLC3.Type -> GenM STLC3.Term
@@ -77,13 +77,13 @@ genWellTypedExp'' STLC3.TyBool = Gen.bool <&> bool STLC3.TmTrue STLC3.TmFalse
 genWellTypedExp'' (STLC3.TyFun ty ty') = do
   var <- freshVar
   STLC3.TmFun var ty <$> local (insertVar var ty) (genWellTypedExp' ty')
-genWellTypedExp'' STLC3.TyBList =
+genWellTypedExp'' (STLC3.TyList ty) =
   Gen.shrink shrinkExp $
     Gen.recursive
       Gen.choice
-      [ pure STLC3.TmNil
+      [ pure (STLC3.TmNil ty)
       ]
-      [ STLC3.TmCons <$> genWellTypedExp' STLC3.TyBool <*> genWellTypedExp' STLC3.TyBList
+      [ STLC3.TmCons ty <$> genWellTypedExp' ty <*> genWellTypedExp' (STLC3.TyList ty)
       ]
 
 freshVar :: GenM STLC3.Id
@@ -104,9 +104,10 @@ genWellTypedExp''' ty =
         tm'' <- genWellTypedExp'' ty
         pure (STLC3.TmIf tm tm' tm'')
       tmFold = do
-        tm <- genWellTypedExp'' (STLC3.TyFun STLC3.TyBool (STLC3.TyFun ty ty))
+        ty' <- genTy
+        tm <- genWellTypedExp'' (STLC3.TyFun ty' (STLC3.TyFun ty ty))
         tm' <- genWellTypedExp'' ty
-        tm'' <- genWellTypedExp'' STLC3.TyBList
+        tm'' <- genWellTypedExp'' (STLC3.TyList ty')
         pure (STLC3.TmFold tm tm' tm'')
    in Gen.choice [tmIf, tmFold]
 
@@ -141,10 +142,10 @@ genKnownTypeMaybe = do
 
 -- | Sample.
 -- >>> flip runStateT (Seed.from 1) $ sample genTy
--- (TyBList,Seed 16204969531660614133 5610259966137620355)
+-- (TyList TyUnit,Seed 16204969531660614133 5610259966137620355)
 --
--- >>> flip runStateT (Seed.from 6) $ sample $ genWellTypedExp STLC3.TyBList
--- Identity (TmApp (TmFun "x6" TyBList (TmVar "x6")) (TmIf TmFalse (TmCons TmFalse (TmFold (TmFun "x0" TyBool (TmFun "x1" TyBList (TmVar "x1"))) TmNil (TmCons TmFalse (TmApp (TmFun "x2" TyBool TmNil) TmTrue)))) (TmCons (TmApp (TmFun "x5" (TyFun TyBool TyBList) TmFalse) (TmFun "x3" TyBool (TmApp (TmFun "x4" TyUnit TmNil) TmUnit))) (TmIf TmFalse (TmCons (TmIf TmFalse TmTrue TmTrue) (TmIf TmFalse TmNil TmNil)) (TmCons TmFalse TmNil)))),Seed 17676705464547183192 13115728398345486507)
+-- >>> flip runStateT (Seed.from 6) $ sample $ genWellTypedExp (STLC3.TyList STLC3.TyBool)
+-- Identity (TmApp (TmFun "x8" (TyList TyBool) (TmVar "x8")) (TmIf TmFalse (TmCons TyBool TmFalse (TmFold (TmFun "x0" (TyList TyUnit) (TmApp (TmIf TmFalse (TmFun "x1" (TyList TyUnit) (TmFun "x2" (TyList TyBool) (TmVar "x2"))) (TmFun "x3" (TyList TyUnit) (TmFun "x4" (TyList TyBool) (TmVar "x4")))) (TmVar "x0"))) (TmCons TyBool TmFalse (TmApp (TmFun "x5" TyBool (TmNil TyBool)) TmTrue)) (TmNil (TyList TyUnit)))) (TmCons TyBool (TmApp (TmFun "x7" (TyFun TyBool TyBool) TmFalse) (TmFun "x6" TyBool (TmVar "x6"))) (TmIf TmFalse (TmCons TyBool (TmIf TmFalse TmTrue TmTrue) (TmIf TmFalse (TmNil TyBool) (TmNil TyBool))) (TmCons TyBool TmFalse (TmNil TyBool))))),Seed 17676705464547183192 13115728398345486507)
 sample :: forall m a. Monad m => GenT m a -> StateT Seed.Seed m a
 sample gen =
   let go :: StateT Seed.Seed m a

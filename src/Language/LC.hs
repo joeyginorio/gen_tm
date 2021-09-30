@@ -110,7 +110,6 @@ eval (TmApp (TmFun x tm1) tm2) = do
   tm <- subst x tm2 tm1
   eval tm
 eval (TmApp tm1 tm2) = do
-  scribe evalStatsNumSteps (Sum 1)
   tm1' <- eval tm1
   eval $ TmApp tm1' tm2
 eval tm = return tm

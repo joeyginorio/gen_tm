@@ -38,12 +38,16 @@ library
                   , Language.STLC3
                   , Language.STLC3.Sample
                   , Language.STLC3.ToLC2
+                  , Language.STLC3.ToSTLC3Eager
                   , Language.STLC3Eager
                   , Language.STLC3Eager.Sample
                   , Language.STLC3Eager.ToLCEager
+                  , Language.STLC3Eager.ToSTLC3
                   , Language.CL
                   , Language.LC
+                  , Language.LC.ToLCEager
                   , Language.LCEager
+                  , Language.LCEager.ToLC
                   , Language.LC2
                   , Language.LC2.ToLC
                   , Paths_gen_tm
@@ -117,7 +121,9 @@ test-suite spec
                   , Language.STLC3Spec
                   , Language.STLC3.ToLC2Spec
                   , Language.LC2.ToLCSpec
+                  , Language.LCEager.ToLCSpec
                   , Language.STLC3Eager.ToLCEagerSpec
+                  , Language.STLC3Eager.ToSTLC3Spec
                   , Language.STLC3EagerSpec
   build-depends:    QuickCheck
                   , base
@@ -128,6 +134,7 @@ test-suite spec
                   , hedgehog-quickcheck
                   , hspec
                   , hspec-hedgehog
+                  , lens
                   , lifted-async
                   , mmorph
                   , monad-control
