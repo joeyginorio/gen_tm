@@ -571,8 +571,8 @@ instance HasExamples 'STLC3Lazy where
         (stlc3Tm', _) = STLC3.evalWR stlc3Tm
         _ex3LazyReducedSTLC3LazyTermNoVariableRenaming = STLC3.toSTLC3EagerExp stlc3Tm'
         _ex3LazyReducedSTLC3LazyTermNoVariableRenamingStats = STLC3Eager.countConstructors _ex3LazyReducedSTLC3LazyTermNoVariableRenaming
-        _ex3LazyReducedSTLC3LazyTermNoVariableRenamingPretty = Text.pack . STLC3Eager.pprintTerm $ _ex3LazyReducedSTLC3LazyTermNoVariableRenaming
-        _ex3LazyReducedSTLC3LazyTermNoVariableRenamingPrettyWithSig = Text.pack . STLC3Eager.pprintTermWithSig $ _ex3LazyReducedSTLC3LazyTermNoVariableRenaming
+        _ex3LazyReducedSTLC3LazyTermNoVariableRenamingPretty = Text.pack . STLC3.pprintTerm $ stlc3Tm'
+        _ex3LazyReducedSTLC3LazyTermNoVariableRenamingPrettyWithSig = Text.pack . STLC3.pprintTermWithSig $ stlc3Tm'
         _ex3LazyLCLazyTerm = STLC3Eager.toLCEager _ex3LazySTLC3LazyTerm
         _ex3LazyLCLazyTermStats = LCEager.countConstructors _ex3LazyLCLazyTerm
         _ex3LazyLCLazyTermPretty = Text.pack . LCEager.pprintTerm $ _ex3LazyLCLazyTerm
@@ -583,7 +583,7 @@ instance HasExamples 'STLC3Lazy where
         (lcTm', _) = LC.evalWR lcTm
         _ex3LazyReducedLCLazyTermNoVariableRenaming = LC.toLCEagerExp lcTm'
         _ex3LazyReducedLCLazyTermNoVariableRenamingStats = LCEager.countConstructors _ex3LazyReducedLCLazyTermNoVariableRenaming
-        _ex3LazyReducedLCLazyTermNoVariableRenamingPretty = Text.pack . LCEager.pprintTerm $ _ex3LazyReducedLCLazyTermNoVariableRenaming
+        _ex3LazyReducedLCLazyTermNoVariableRenamingPretty = Text.pack . LC.pprintTerm $ lcTm'
      in Example3Lazy {..}
   term = ex3LazySTLC3LazyTerm
   prettyTerm = ex3LazySTLC3LazyTermPretty
