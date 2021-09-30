@@ -1,14 +1,16 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Language.STLC3Eager.ToSTLC3 where
 
 import Bound (instantiate1)
+import Bound.Term (closed)
 import Control.Monad.Fresh (Fresh, MonadFresh (fresh), runFreshFrom)
+import Data.Maybe (fromJust)
 import qualified Data.Text as Text
 import Language.Eagerness (Eagerness (Lazy))
 import Language.STLC3 (Id, Term (..), Type (..))
@@ -19,8 +21,8 @@ instance Enum Id where
   fromEnum = read . Text.unpack
 
 -- | Convert an STLC3Eager term to an STLC3 term.
-toSTLC3Term :: STLC3Eager.Exp 'Lazy Id -> Term
-toSTLC3Term e = runFreshFrom "0" $ go e
+toSTLC3Term :: forall a. STLC3Eager.Exp 'Lazy a -> Term
+toSTLC3Term = runFreshFrom "0" . go . fromJust . closed
   where
     go :: STLC3Eager.Exp 'Lazy Id -> Fresh Id Term
     go (STLC3Eager.Var a') = pure $ TmVar a'
@@ -33,7 +35,7 @@ toSTLC3Term e = runFreshFrom "0" $ go e
     go STLC3Eager.Unit = pure TmUnit
     go STLC3Eager.True = pure TmTrue
     go STLC3Eager.False = pure TmFalse
-    go (STLC3Eager.If c t e') = TmIf <$> go c <*> go t <*> go e'
+    go (STLC3Eager.If c t e) = TmIf <$> go c <*> go t <*> go e
     go (STLC3Eager.Nil ty) = pure $ TmNil (toSTLC3Type ty)
     go (STLC3Eager.Cons ty h t) =
       TmCons (toSTLC3Type ty) <$> go h <*> go t

@@ -47,18 +47,22 @@ import qualified Hedgehog.Internal.Gen as Gen
 import qualified Hedgehog.Internal.Seed as Seed
 import Language.Eagerness (Eagerness (..))
 import qualified Language.LC as LC
+import qualified Language.LC.ToLCEager as LC
 import qualified Language.LC2 as LC2
 import qualified Language.LC2.ToLC as LC2
 import qualified Language.LCEager as LCEager
+import qualified Language.LCEager.ToLC as LCEager
 import qualified Language.STLC2 as STLC2
 import qualified Language.STLC2.Sample as STLC2.Sample
 import qualified Language.STLC2.ToLC as STLC2
 import qualified Language.STLC3 as STLC3
 import qualified Language.STLC3.Sample as STLC3.Sample
 import qualified Language.STLC3.ToLC2 as STLC3
+import qualified Language.STLC3.ToSTLC3Eager as STLC3
 import qualified Language.STLC3Eager as STLC3Eager
 import qualified Language.STLC3Eager.Sample as STLC3Eager.Sample
 import qualified Language.STLC3Eager.ToLCEager as STLC3Eager
+import qualified Language.STLC3Eager.ToSTLC3 as STLC3Eager
 import Opts (Language (..))
 import Pipes ((>->))
 import qualified Pipes as P
@@ -490,6 +494,14 @@ data Example3Lazy where
       _ex3LazyReducedSTLC3LazyTermPretty :: Text,
       -- | Pretty-printed reduced example simply-typed lambda calculus term with type signatures
       _ex3LazyReducedSTLC3LazyTermPrettyWithSig :: Text,
+      -- | Reduced example simply-typed lambda calculus term
+      _ex3LazyReducedSTLC3LazyTermNoVariableRenaming :: STLC3Eager.Exp 'Lazy Int,
+      -- | Reduced term statistics
+      _ex3LazyReducedSTLC3LazyTermNoVariableRenamingStats :: STLC3Eager.TermStats Int,
+      -- | Pretty-printed reduced example simply-typed lambda calculus term
+      _ex3LazyReducedSTLC3LazyTermNoVariableRenamingPretty :: Text,
+      -- | Pretty-printed reduced example simply-typed lambda calculus term with type signatures
+      _ex3LazyReducedSTLC3LazyTermNoVariableRenamingPrettyWithSig :: Text,
       -- | Example term converted to untyped lambda calculus
       _ex3LazyLCLazyTerm :: LCEager.Exp 'Lazy Int,
       -- | Lambda calculus term statistics
@@ -503,7 +515,13 @@ data Example3Lazy where
       -- | Reduced lambda calculus term statistics
       _ex3LazyReducedLCLazyTermStats :: LCEager.TermStats Int,
       -- | Pretty-printed reduced untyped lambda calculus term
-      _ex3LazyReducedLCLazyTermPretty :: Text
+      _ex3LazyReducedLCLazyTermPretty :: Text,
+      -- | Reduced untyped lambda calculus term
+      _ex3LazyReducedLCLazyTermNoVariableRenaming :: LCEager.Exp 'Lazy Int,
+      -- | Reduced lambda calculus term statistics
+      _ex3LazyReducedLCLazyTermNoVariableRenamingStats :: LCEager.TermStats Int,
+      -- | Pretty-printed reduced untyped lambda calculus term
+      _ex3LazyReducedLCLazyTermNoVariableRenamingPretty :: Text
     } ->
     Example3Lazy
   deriving stock (Show, Eq, Ord, Generic)
@@ -549,12 +567,23 @@ instance HasExamples 'STLC3Lazy where
         _ex3LazyReducedSTLC3LazyTermStats = STLC3Eager.countConstructors _ex3LazyReducedSTLC3LazyTerm
         _ex3LazyReducedSTLC3LazyTermPretty = Text.pack . STLC3Eager.pprintTerm $ _ex3LazyReducedSTLC3LazyTerm
         _ex3LazyReducedSTLC3LazyTermPrettyWithSig = Text.pack . STLC3Eager.pprintTermWithSig $ _ex3LazyReducedSTLC3LazyTerm
+        stlc3Tm = STLC3Eager.toSTLC3Term _ex3LazySTLC3LazyTerm
+        (stlc3Tm', _) = STLC3.evalWR stlc3Tm
+        _ex3LazyReducedSTLC3LazyTermNoVariableRenaming = STLC3.toSTLC3EagerExp stlc3Tm'
+        _ex3LazyReducedSTLC3LazyTermNoVariableRenamingStats = STLC3Eager.countConstructors _ex3LazyReducedSTLC3LazyTermNoVariableRenaming
+        _ex3LazyReducedSTLC3LazyTermNoVariableRenamingPretty = Text.pack . STLC3Eager.pprintTerm $ _ex3LazyReducedSTLC3LazyTermNoVariableRenaming
+        _ex3LazyReducedSTLC3LazyTermNoVariableRenamingPrettyWithSig = Text.pack . STLC3Eager.pprintTermWithSig $ _ex3LazyReducedSTLC3LazyTermNoVariableRenaming
         _ex3LazyLCLazyTerm = STLC3Eager.toLCEager _ex3LazySTLC3LazyTerm
         _ex3LazyLCLazyTermStats = LCEager.countConstructors _ex3LazyLCLazyTerm
         _ex3LazyLCLazyTermPretty = Text.pack . LCEager.pprintTerm $ _ex3LazyLCLazyTerm
         (_ex3LazyReducedLCLazyTerm, _ex3LazyLCLazyEvalStats) = LCEager.whnf' _ex3LazyLCLazyTerm
         _ex3LazyReducedLCLazyTermStats = LCEager.countConstructors _ex3LazyReducedLCLazyTerm
         _ex3LazyReducedLCLazyTermPretty = Text.pack . LCEager.pprintTerm $ _ex3LazyReducedLCLazyTerm
+        lcTm = LCEager.toLCTerm _ex3LazyLCLazyTerm
+        (lcTm', _) = LC.evalWR lcTm
+        _ex3LazyReducedLCLazyTermNoVariableRenaming = LC.toLCEagerExp lcTm'
+        _ex3LazyReducedLCLazyTermNoVariableRenamingStats = LCEager.countConstructors _ex3LazyReducedLCLazyTermNoVariableRenaming
+        _ex3LazyReducedLCLazyTermNoVariableRenamingPretty = Text.pack . LCEager.pprintTerm $ _ex3LazyReducedLCLazyTermNoVariableRenaming
      in Example3Lazy {..}
   term = ex3LazySTLC3LazyTerm
   prettyTerm = ex3LazySTLC3LazyTermPretty

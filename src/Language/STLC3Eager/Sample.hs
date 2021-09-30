@@ -1,6 +1,6 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE DataKinds #-}
 
 module Language.STLC3Eager.Sample where
 
@@ -154,9 +154,7 @@ genKnownTypeMaybe = do
 -- TList TUnit
 --
 -- >>> e = runIdentity . flip evalStateT (Seed.from 6) $ sample $ genWellTypedExp (TList TBool) :: Exp 'Eager Char
--- >>> e
 -- >>> pprintTerm e
--- (:@) {function = Lam {ty = TList TBool, lamExp = Scope (Var (B ()))}, argument = If {condition = False, thenExp = Cons {ty = TBool, head = False, tail = Foldr {step = Lam {ty = TList TUnit, lamExp = Scope ((:@) {function = If {condition = False, thenExp = Lam {ty = TList TUnit, lamExp = Scope (Lam {ty = TList TBool, lamExp = Scope (Var (B ()))})}, elseExp = Lam {ty = TList TUnit, lamExp = Scope (Lam {ty = TList TBool, lamExp = Scope (Var (B ()))})}}, argument = Var (B ())})}, initial = Cons {ty = TBool, head = False, tail = (:@) {function = Lam {ty = TBool, lamExp = Scope (Nil {ty = TBool})}, argument = True}}, list = Nil {ty = TList TUnit}}}, elseExp = Cons {ty = TBool, head = (:@) {function = Lam {ty = TArr TBool TBool, lamExp = Scope False}, argument = Lam {ty = TBool, lamExp = Scope (Var (B ()))}}, tail = If {condition = False, thenExp = Cons {ty = TBool, head = If {condition = False, thenExp = True, elseExp = True}, tail = If {condition = False, thenExp = Nil {ty = TBool}, elseExp = Nil {ty = TBool}}}, elseExp = Cons {ty = TBool, head = False, tail = Nil {ty = TBool}}}}}}
 -- "(\\x0 -> x0) (ite False ((:) False (foldr (\\x1 -> ite False (\\x2 -> \\x3 -> x3) (\\x4 -> \\x5 -> x5) x1) ((:) False ((\\x6 -> []) True)) [])) ((:) ((\\x7 -> False) (\\x8 -> x8)) (ite False ((:) (ite False True True) (ite False [] [])) [False])))"
 -- >>> pprintTerm . fst $ nf' e
 -- "[False, False]"

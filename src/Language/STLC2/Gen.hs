@@ -62,13 +62,13 @@ genTm ctx ty = genTmUnit ctx ty
 
 -- | Generate unit terms
 genTmUnit :: Context -> Type -> SearchS (Sum Cost) Term
-genTmUnit _ (TyUnit) = do cost' (Sum 1)
+genTmUnit _ TyUnit   = do cost' (Sum 1)
                           return TmUnit
 genTmUnit _ _        = abandon
 
 -- | Generate boolean terms
 genTmBool :: Context -> Type -> SearchS (Sum Cost) Term
-genTmBool _ (TyBool) = do cost' (Sum 1)
+genTmBool _ TyBool   = do cost' (Sum 1)
                           return TmTrue
                    <|> do cost' (Sum 1)
                           return TmFalse
@@ -76,7 +76,7 @@ genTmBool _ _        = abandon
 
 -- | Generate variable terms
 genTmVar :: Context -> Type -> SearchS (Sum Cost) Term
-genTmVar []           ty' = abandon
+genTmVar []           _   = abandon
 genTmVar ((x,ty):ctx) ty' | ty == ty' = do cost' (Sum 1)
                                            return (TmVar x)
                           | otherwise = genTmVar ctx ty'
@@ -104,10 +104,9 @@ genTmFun _ _                 = abandon
 --
 -- NOTE: Size of terms includes size of type annotations when using 'genFun'
 sizeTy :: Type -> Cost
-sizeTy (TyUnit)         = 1
-sizeTy (TyBool)         = 1
--- sizeTy (TyProd ty1 ty2) = 1 + (sizeTy ty1) + (sizeTy ty2)
-sizeTy (TyFun ty1 ty2)  = 1 + (sizeTy ty1) + (sizeTy ty2)
+sizeTy TyUnit           = 1
+sizeTy TyBool           = 1
+sizeTy (TyFun ty1 ty2)  = 1 + sizeTy ty1 + sizeTy ty2
 
 -- | Generate if-then-else terms
 genTmIf :: Context -> Type -> SearchS (Sum Cost) Term
