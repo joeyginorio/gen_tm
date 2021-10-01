@@ -10,7 +10,7 @@
 module Main where
 
 import qualified Control.Concurrent.MSem as MSem
-import Control.Lens ((^.), _1)
+import Control.Lens ((^.), _3)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Aeson (ToJSON (toEncoding))
 import Data.Aeson.Encoding (encodingToLazyByteString)
@@ -124,13 +124,16 @@ genCompAndExport config@Opts.GenCompConfig {..} =
         Nothing -> "Skipped reading keys."
       P.runEffect $
         Dataset.compositions examples (HashMap.keysSet <$> keys)
-          >-> Dataset.toExample
-          >-> Dataset.deduplicate HashSet.empty Dataset.prettyReducedTerms
-          >-> Dataset.filterByMaxTokens tokenize (runIdentity genCompConfigMaxInputTokens) Dataset.prettyTerms
-          >-> Dataset.filterByMaxTokens tokenize (runIdentity genCompConfigMaxOutputTokens) Dataset.prettyReducedTerms
-          >-> Dataset.deduplicate (HashMap.keysSet examples) (^. Dataset.prettyTerm)
+          >-> P.for P.cat (\(tm, tm', a) -> P.yield (tm, tm', uncurry Dataset.toExample' a))
+          -- >-> Dataset.deduplicate HashSet.empty (^. _3 . Dataset.prettyReducedTerm)
+          >-> Dataset.filterByMaxTokens tokenize (runIdentity genCompConfigMaxInputTokens) (Dataset.prettyTerms . (^. _3))
+          >-> Dataset.filterByMaxTokens tokenize (runIdentity genCompConfigMaxOutputTokens) (Dataset.prettyReducedTerms . (^. _3))
+          >-> Dataset.deduplicate (HashMap.keysSet examples) (^. _3 . Dataset.prettyTerm)
+          >-> Dataset.deduplicate' 3 HashMap.empty (\(tm, _, _) -> tm)
+          >-> Dataset.deduplicate' 3 HashMap.empty (\(_, tm', _) -> tm')
           >-> P.take (runIdentity genCompConfigNumberOfExampes)
           >-> P.tee (showProgress $ runIdentity genCompConfigNumberOfExampes)
+          >-> P.map (^. _3)
           >-> Dataset.writeJsonLines (runIdentity genCompConfigOutputFolder </> runIdentity genCompConfigOutputDataFileName)
 
 saveAsJson :: forall m a. (P.MonadSafe m, ToJSON a) => FilePath -> a -> m ()

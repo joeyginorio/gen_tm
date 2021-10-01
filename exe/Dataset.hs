@@ -80,6 +80,8 @@ class
   ( Monoid (Dataset.Histogram l (IntMap Int)),
     Aeson.ToJSON (Dataset.Example l),
     Aeson.FromJSON (Dataset.Example l),
+    Hashable (Term l),
+    Eq (Term l),
     Hashable (Type l),
     Eq (Type l)
   ) =>
@@ -622,8 +624,8 @@ instance HasExamples 'STLC3Lazy where
   prettyReducedTerms =
     sequenceA
       [ (^. ex3LazyReducedSTLC3LazyTermPretty),
-        (^. ex3LazyReducedSTLC3LazyTermNoVariableRenamingPretty),
         (^. ex3LazyReducedLCLazyTermPretty),
+        (^. ex3LazyReducedSTLC3LazyTermNoVariableRenamingPretty),
         (^. ex3LazyReducedLCLazyTermNoVariableRenamingPretty)
       ]
   app = (STLC3Eager.:@)
@@ -667,13 +669,28 @@ deduplicate s f = P.evalStateP s . P.for P.cat $ \ex -> do
       SL.modify (HashSet.insert a)
     else pure ()
 
+-- | Prevent examples from occurring more than n times.
+deduplicate' :: forall m r a v. (Monad m, Eq a, Hashable a) => Int -> HashMap a Int -> (v -> a) -> P.Pipe v v m r
+deduplicate' n m f = P.evalStateP m . P.for P.cat $ \ex -> do
+  m' <- SL.get
+  let a = f ex
+  case HashMap.lookup a m' of
+    Nothing -> do
+      P.yield ex
+      SL.modify (HashMap.insert a 1)
+    Just i
+      | i < n -> do
+        P.yield ex
+        SL.modify (HashMap.insert a (i + 1))
+      | otherwise -> pure ()
+
 -- | Populate cache.
 cache :: forall m r a v. (Monad m, Eq a, Hashable a, SL.MonadState (HashMap a v) m) => (v -> a) -> P.Pipe v v m r
 cache f = P.for P.cat $ \ex -> do
   SL.modify (HashMap.insert (f ex) ex)
 
 -- | Produce compositional examples.
-compositions :: forall m a l. (Monad m, Eq a, Hashable a, HasExamples l) => HashMap a (Example l) -> Maybe (HashSet a) -> P.Producer (Type l, Term l) m ()
+compositions :: forall m a l. (Monad m, Eq a, Hashable a, HasExamples l) => HashMap a (Example l) -> Maybe (HashSet a) -> P.Producer (Term l, Term l, (Type l, Term l)) m ()
 compositions examples keys =
   forEachExample $ \ex -> do
     let tm = ex ^. term
@@ -682,7 +699,7 @@ compositions examples keys =
           comp = app tm tm'
       case typeCheck comp of
         Nothing -> pure ()
-        Just ty -> P.yield (ty, comp)
+        Just ty -> P.yield (tm, tm', (ty, comp))
   where
     filteredExamples = case keys of
       Nothing -> examples

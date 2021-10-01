@@ -104,17 +104,17 @@ insertVar uname ty' =
 genWellTypedExp''' :: forall k a. Eq a => Ty k -> GTyM k a (Exp k a)
 genWellTypedExp''' ty' =
   let genIf = do
-        c <- genWellTypedExp'' TBool
-        t <- genWellTypedExp'' ty'
-        e <- genWellTypedExp'' ty'
+        c <- genWellTypedExp' TBool
+        t <- genWellTypedExp' ty'
+        e <- genWellTypedExp' ty'
         pure (If c t e)
       genFoldr =
         -- (ty'' -> ty' -> ty') -> ty' -> [ty''] -> ty'
         do
           ty'' <- genTy
-          s <- genWellTypedExp'' (TArr ty'' (TArr ty' ty'))
-          i <- genWellTypedExp'' ty'
-          l <- genWellTypedExp'' (TList ty'')
+          s <- genWellTypedExp' (TArr ty'' (TArr ty' ty'))
+          i <- genWellTypedExp' ty'
+          l <- genWellTypedExp' (TList ty'')
           pure (Foldr s i l)
    in Gen.choice [genIf, genFoldr]
 
@@ -155,9 +155,9 @@ genKnownTypeMaybe = do
 --
 -- >>> e = runIdentity . flip evalStateT (Seed.from 6) $ sample $ genWellTypedExp (TList TBool) :: Exp 'Eager Char
 -- >>> pprintTerm e
--- "(\\x0 -> x0) (ite False ((:) False (foldr (\\x1 -> ite False (\\x2 -> \\x3 -> x3) (\\x4 -> \\x5 -> x5) x1) ((:) False ((\\x6 -> []) True)) [])) ((:) ((\\x7 -> False) (\\x8 -> x8)) (ite False ((:) (ite False True True) (ite False [] [])) [False])))"
--- >>> pprintTerm . fst $ nf' e
--- "[False, False]"
+-- "(\\x0 -> x0) (ite (foldr (foldr (\\x1 -> \\x2 -> x2) (\\x3 -> \\x4 -> \\x5 -> x3) [] (ite True (\\x6 -> x6) (\\x7 -> x7)) (\\x8 -> (\\x9 -> \\x10 -> x9) x8)) True (foldr (\\x11 -> \\x12 -> x12) (ite True (\\x13 -> []) (\\x14 -> []) (ite True (\\x15 -> True) (\\x16 -> False))) (ite ((\\x17 -> True) ()) ((\\x18 -> []) ()) []))) (foldr (\\x19 -> ite x19 (foldr (foldr (\\x20 -> \\x21 -> x21) (\\x22 -> \\x23 -> x23) []) (\\x24 -> x24) []) (ite x19 (\\x25 -> x25) (\\x26 -> x26))) ((:) (foldr (\\x27 -> \\x28 -> x28) True []) ((\\x29 -> []) False)) (ite True ((\\x30 -> \\x31 -> []) () ((\\x32 -> x32) ())) (ite False (foldr (\\x33 -> \\x34 -> x34) [] []) ((\\x35 -> []) ())))) (ite (ite ((\\x36 -> x36) False) (foldr (\\x37 -> \\x38 -> x38) False []) ((\\x39 -> x39) False)) (foldr ((\\x40 -> \\x41 -> \\x42 -> x42) ()) ((\\x43 -> \\x44 -> []) False) (ite True [] [])) (\\x45 -> (\\x46 -> []) x45) (foldr (\\x47 -> (\\x48 -> \\x49 -> x49) x47) (\\x50 -> []) [] False)))"
+--- >>> pprintTerm . fst $ nf' e
+-- "[True]"
 sample :: forall m a. Monad m => GenT m a -> StateT Seed.Seed m a
 sample gen =
   let go :: StateT Seed.Seed m a
