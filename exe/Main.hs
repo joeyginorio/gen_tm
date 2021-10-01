@@ -93,16 +93,21 @@ genTmAndExport config@Opts.GenTmConfig {..} =
 
 genCompAndExport :: Opts.GenCompConfig Identity -> IO ()
 genCompAndExport config@Opts.GenCompConfig {..} =
-  P.runSafeT $ do
-    saveAsJson (runIdentity genCompConfigOutputFolder </> runIdentity genCompConfigOutputConfigFileName) (Opts.Config . Opts.Comp $ config)
-    case runIdentity genCompConfigLanguage of
-      Opts.STLC2 -> go @'Opts.STLC2
-      Opts.STLC3 -> go @'Opts.STLC3
-      Opts.STLC3Eager -> go @'Opts.STLC3Eager
-      Opts.STLC3Lazy -> go @'Opts.STLC3Lazy
+  Tokenizers.withTokenizerFromConfigFile (runIdentity genCompConfigTokenizer) $ \tokenizer -> do
+    tokenizerSem <- MSem.new (1 :: Int)
+    let tokenize input = MSem.with tokenizerSem $ do
+          encoding <- Tokenizers.encode tokenizer input
+          Tokenizers.getIDs encoding
+    P.runSafeT $ do
+      saveAsJson (runIdentity genCompConfigOutputFolder </> runIdentity genCompConfigOutputConfigFileName) (Opts.Config . Opts.Comp $ config)
+      case runIdentity genCompConfigLanguage of
+        Opts.STLC2 -> go @'Opts.STLC2 tokenize
+        Opts.STLC3 -> go @'Opts.STLC3 tokenize
+        Opts.STLC3Eager -> go @'Opts.STLC3Eager tokenize
+        Opts.STLC3Lazy -> go @'Opts.STLC3Lazy tokenize
   where
-    go :: forall l. Dataset.HasExamples l => P.SafeT IO ()
-    go = do
+    go :: forall l. Dataset.HasExamples l => Dataset.Tokenize -> P.SafeT IO ()
+    go tokenize = do
       examples :: HashMap Text (Dataset.Example l) <-
         P.runEffect . P.execStateP mempty $
           Dataset.readJsonLines (runIdentity genCompConfigInputFolder </> runIdentity genCompConfigInputDataFileName)
@@ -119,8 +124,10 @@ genCompAndExport config@Opts.GenCompConfig {..} =
         Nothing -> "Skipped reading keys."
       P.runEffect $
         Dataset.compositions examples (HashMap.keysSet <$> keys)
-          >-> Dataset.deduplicate HashSet.empty (^. _1)
           >-> Dataset.toExample
+          >-> Dataset.deduplicate HashSet.empty Dataset.prettyReducedTerms
+          >-> Dataset.filterByMaxTokens tokenize (runIdentity genCompConfigMaxInputTokens) Dataset.prettyTerms
+          >-> Dataset.filterByMaxTokens tokenize (runIdentity genCompConfigMaxOutputTokens) Dataset.prettyReducedTerms
           >-> Dataset.deduplicate (HashMap.keysSet examples) (^. Dataset.prettyTerm)
           >-> P.take (runIdentity genCompConfigNumberOfExampes)
           >-> P.tee (showProgress $ runIdentity genCompConfigNumberOfExampes)

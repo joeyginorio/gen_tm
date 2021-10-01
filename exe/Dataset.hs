@@ -222,8 +222,16 @@ instance HasExamples 'STLC2 where
   term = ex2STLC2Term
   prettyTerm = ex2STLC2TermPretty
   prettyReducedTerm = ex2ReducedSTLC2TermPretty
-  prettyTerms = sequenceA [(^. ex2STLC2TermPretty), (^. ex2LCTermPretty)]
-  prettyReducedTerms = sequenceA [(^. ex2ReducedSTLC2TermPretty), (^. ex2ReducedLCTermPretty)]
+  prettyTerms =
+    sequenceA
+      [ (^. ex2STLC2TermPretty),
+        (^. ex2LCTermPretty)
+      ]
+  prettyReducedTerms =
+    sequenceA
+      [ (^. ex2ReducedSTLC2TermPretty),
+        (^. ex2ReducedLCTermPretty)
+      ]
   app = STLC2.TmApp
   typeCheck tm = either (const Nothing) Just $ runReaderT (STLC2.tyCheck tm) []
   histogram' ex = do
@@ -350,8 +358,18 @@ instance HasExamples 'STLC3 where
   term = ex3STLC3Term
   prettyTerm = ex3STLC3TermPretty
   prettyReducedTerm = ex3ReducedSTLC3TermPretty
-  prettyTerms = sequenceA [(^. ex3STLC3TermPretty), (^. ex3LC2TermPretty), (^. ex3LCTermPretty)]
-  prettyReducedTerms = sequenceA [(^. ex3ReducedSTLC3TermPretty), (^. ex3ReducedLC2TermPretty), (^. ex3ReducedLCTermPretty)]
+  prettyTerms =
+    sequenceA
+      [ (^. ex3STLC3TermPretty),
+        (^. ex3LC2TermPretty),
+        (^. ex3LCTermPretty)
+      ]
+  prettyReducedTerms =
+    sequenceA
+      [ (^. ex3ReducedSTLC3TermPretty),
+        (^. ex3ReducedLC2TermPretty),
+        (^. ex3ReducedLCTermPretty)
+      ]
   app = STLC3.TmApp
   typeCheck tm = either (const Nothing) Just $ runReaderT (STLC3.tyCheck tm) []
   histogram' ex = do
@@ -458,8 +476,16 @@ instance HasExamples 'STLC3Eager where
   term = ex3EagerSTLC3EagerTerm
   prettyTerm = ex3EagerSTLC3EagerTermPretty
   prettyReducedTerm = ex3EagerReducedSTLC3EagerTermPretty
-  prettyTerms = sequenceA [(^. ex3EagerSTLC3EagerTermPretty), (^. ex3EagerLCEagerTermPretty)]
-  prettyReducedTerms = sequenceA [(^. ex3EagerReducedSTLC3EagerTermPretty), (^. ex3EagerReducedLCEagerTermPretty)]
+  prettyTerms =
+    sequenceA
+      [ (^. ex3EagerSTLC3EagerTermPretty),
+        (^. ex3EagerLCEagerTermPretty)
+      ]
+  prettyReducedTerms =
+    sequenceA
+      [ (^. ex3EagerReducedSTLC3EagerTermPretty),
+        (^. ex3EagerReducedLCEagerTermPretty)
+      ]
   app = (STLC3Eager.:@)
   typeCheck tm = STLC3Eager.typeCheck' tm
   histogram' ex = do
@@ -588,8 +614,18 @@ instance HasExamples 'STLC3Lazy where
   term = ex3LazySTLC3LazyTerm
   prettyTerm = ex3LazySTLC3LazyTermPretty
   prettyReducedTerm = ex3LazyReducedSTLC3LazyTermPretty
-  prettyTerms = sequenceA [(^. ex3LazySTLC3LazyTermPretty), (^. ex3LazyLCLazyTermPretty)]
-  prettyReducedTerms = sequenceA [(^. ex3LazyReducedSTLC3LazyTermPretty), (^. ex3LazyReducedLCLazyTermPretty)]
+  prettyTerms =
+    sequenceA
+      [ (^. ex3LazySTLC3LazyTermPretty),
+        (^. ex3LazyLCLazyTermPretty)
+      ]
+  prettyReducedTerms =
+    sequenceA
+      [ (^. ex3LazyReducedSTLC3LazyTermPretty),
+        (^. ex3LazyReducedSTLC3LazyTermNoVariableRenamingPretty),
+        (^. ex3LazyReducedLCLazyTermPretty),
+        (^. ex3LazyReducedLCLazyTermNoVariableRenamingPretty)
+      ]
   app = (STLC3Eager.:@)
   typeCheck tm = STLC3Eager.typeCheck' tm
   histogram' ex = do
