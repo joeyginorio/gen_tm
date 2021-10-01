@@ -43,7 +43,7 @@ prop_welltypedNormalForm =
     e :: Exp 'Eager Int <- forAll (Sample.genWellTypedExp ty)
     let e' = fst $ nf' e
     let ty' = typeCheck' e'
-    withTimeLimit 10000 $ Just ty === ty'
+    withTimeLimit 25000 $ Just ty === ty'
 
 prop_prettyTyNoNewlines :: Property
 prop_prettyTyNoNewlines =
