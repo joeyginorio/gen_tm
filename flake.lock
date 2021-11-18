@@ -185,6 +185,24 @@
         "type": "github"
       }
     },
+    "naersk": {
+      "inputs": {
+        "nixpkgs": "nixpkgs"
+      },
+      "locked": {
+        "lastModified": 1629707199,
+        "narHash": "sha256-sGxlmfp5eXL5sAMNqHSb04Zq6gPl+JeltIZ226OYN0w=",
+        "owner": "nix-community",
+        "repo": "naersk",
+        "rev": "df71f5e4babda41cd919a8684b72218e2e809fa9",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
+        "repo": "naersk",
+        "type": "github"
+      }
+    },
     "nix-tools": {
       "flake": false,
       "locked": {
@@ -199,6 +217,20 @@
         "owner": "input-output-hk",
         "repo": "nix-tools",
         "type": "github"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1630084536,
+        "narHash": "sha256-ZFO/c1n5NNzHdY848Lfrbh8QN8MdP6oajbj4Z55rVXs=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "40f337454d6c76bc12500564f4553d6853e83aeb",
+        "type": "github"
+      },
+      "original": {
+        "id": "nixpkgs",
+        "type": "indirect"
       }
     },
     "nixpkgs-2003": {
@@ -265,6 +297,20 @@
         "type": "github"
       }
     },
+    "nixpkgs_2": {
+      "locked": {
+        "lastModified": 1630084536,
+        "narHash": "sha256-ZFO/c1n5NNzHdY848Lfrbh8QN8MdP6oajbj4Z55rVXs=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "40f337454d6c76bc12500564f4553d6853e83aeb",
+        "type": "github"
+      },
+      "original": {
+        "id": "nixpkgs",
+        "type": "indirect"
+      }
+    },
     "old-ghc-nix": {
       "flake": false,
       "locked": {
@@ -290,6 +336,7 @@
           "haskell-nix",
           "nixpkgs-unstable"
         ],
+        "tokenizers": "tokenizers",
         "utils": [
           "haskell-nix",
           "flake-utils"
@@ -309,6 +356,30 @@
       "original": {
         "owner": "input-output-hk",
         "repo": "stackage.nix",
+        "type": "github"
+      }
+    },
+    "tokenizers": {
+      "inputs": {
+        "naersk": "naersk",
+        "nixpkgs": "nixpkgs_2",
+        "utils": [
+          "haskell-nix",
+          "flake-utils"
+        ]
+      },
+      "locked": {
+        "lastModified": 1630175276,
+        "narHash": "sha256-cTZd9yHt9BdVHaobdkzSACbLyBfXvhqGQpqa+qwLlJ8=",
+        "owner": "hasktorch",
+        "repo": "tokenizers",
+        "rev": "ea1de2ec7230d6d315fb1028e8d58b09a7a7c2ac",
+        "type": "github"
+      },
+      "original": {
+        "owner": "hasktorch",
+        "ref": "flakes",
+        "repo": "tokenizers",
         "type": "github"
       }
     }

@@ -1,11 +1,16 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Main where
 
-import Control.Lens ((^.))
+import qualified Control.Concurrent.MSem as MSem
+import Control.Lens ((^.), _3)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Aeson (ToJSON (toEncoding))
 import Data.Aeson.Encoding (encodingToLazyByteString)
@@ -13,9 +18,12 @@ import qualified Data.ByteString as BS
 import Data.ByteString.Lazy (toStrict)
 import qualified Data.Either.Validation as Validation
 import Data.Functor.Identity (Identity (..))
+import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.HashSet as HashSet
+import Data.IntMap (IntMap)
 import qualified Data.List as List
+import Data.Text (Text)
 import qualified Data.Text.Lazy as Text.Lazy
 import Data.Traversable (for)
 import qualified Dataset
@@ -30,6 +38,7 @@ import qualified System.Console.ANSI.Codes as ANSI
 import System.FilePath ((</>))
 import qualified System.IO as IO
 import qualified System.ProgressBar as PB
+import qualified Tokenizers
 
 main :: IO ()
 main = do
@@ -44,44 +53,88 @@ main = do
 
 genTmAndExport :: Opts.GenTmConfig Identity -> IO ()
 genTmAndExport config@Opts.GenTmConfig {..} =
-  P.runSafeT $ do
-    saveAsJson (runIdentity genTmConfigOutputFolder </> runIdentity genTmConfigOutputConfigFileName) (Opts.Config . Opts.Tm $ config)
-    hist <-
+  Tokenizers.withTokenizerFromConfigFile (runIdentity genTmConfigTokenizer) $ \tokenizer -> do
+    tokenizerSem <- MSem.new (1 :: Int)
+    let tokenize input = MSem.with tokenizerSem $ do
+          encoding <- Tokenizers.encode tokenizer input
+          Tokenizers.getIDs encoding
+    P.runSafeT $ do
+      saveAsJson (runIdentity genTmConfigOutputFolder </> runIdentity genTmConfigOutputConfigFileName) (Opts.Config . Opts.Tm $ config)
+      case runIdentity genTmConfigLanguage of
+        Opts.STLC2 -> do
+          hist :: Dataset.Histogram2 (IntMap Int) <- go tokenize
+          let hist' = fmap Dataset.toRecords hist
+          saveAsJson (runIdentity genTmConfigOutputFolder </> runIdentity genTmConfigOutputHistogramFileName) hist'
+        Opts.STLC3 -> do
+          hist :: Dataset.Histogram3 (IntMap Int) <- go tokenize
+          let hist' = fmap Dataset.toRecords hist
+          saveAsJson (runIdentity genTmConfigOutputFolder </> runIdentity genTmConfigOutputHistogramFileName) hist'
+        Opts.STLC3Eager -> do
+          hist :: Dataset.Histogram3Eager (IntMap Int) <- go tokenize
+          let hist' = fmap Dataset.toRecords hist
+          saveAsJson (runIdentity genTmConfigOutputFolder </> runIdentity genTmConfigOutputHistogramFileName) hist'
+        Opts.STLC3Lazy -> do
+          hist :: Dataset.Histogram3Lazy (IntMap Int) <- go tokenize
+          let hist' = fmap Dataset.toRecords hist
+          saveAsJson (runIdentity genTmConfigOutputFolder </> runIdentity genTmConfigOutputHistogramFileName) hist'
+  where
+    go :: forall l. Dataset.HasExamples l => Dataset.Tokenize -> P.SafeT IO (Dataset.Histogram l (IntMap Int))
+    go tokenize =
       P.runEffect . P.execStateP mempty $
-        Dataset.sampleStlc (runIdentity genTmConfigSeed)
+        Dataset.sample (runIdentity genTmConfigSeed)
           >-> Dataset.toExample
-          >-> Dataset.deduplicate HashSet.empty (^. Dataset.exSTLC2TermPretty)
+          >-> Dataset.filterByMaxTokens tokenize (runIdentity genTmConfigMaxInputTokens) Dataset.prettyTerms
+          >-> Dataset.filterByMaxTokens tokenize (runIdentity genTmConfigMaxOutputTokens) Dataset.prettyReducedTerms
+          >-> Dataset.deduplicate HashSet.empty (^. Dataset.prettyTerm)
           >-> P.take (runIdentity genTmConfigNumberOfExampes)
           >-> P.tee (showProgress $ runIdentity genTmConfigNumberOfExampes)
           >-> P.tee (Dataset.writeJsonLines (runIdentity genTmConfigOutputFolder </> runIdentity genTmConfigOutputDataFileName))
           >-> Dataset.histogram
-    let hist' = fmap Dataset.toRecords hist
-    saveAsJson (runIdentity genTmConfigOutputFolder </> runIdentity genTmConfigOutputHistogramFileName) hist'
 
 genCompAndExport :: Opts.GenCompConfig Identity -> IO ()
 genCompAndExport config@Opts.GenCompConfig {..} =
-  P.runSafeT $ do
-    saveAsJson (runIdentity genCompConfigOutputFolder </> runIdentity genCompConfigOutputConfigFileName) (Opts.Config . Opts.Comp $ config)
-    examples <-
-      P.runEffect . P.execStateP mempty $
-        Dataset.readJsonLines (runIdentity genCompConfigInputFolder </> runIdentity genCompConfigInputDataFileName)
-          >-> Dataset.cache (^. Dataset.exSTLC2TermPretty)
-          >-> P.drain
-    liftIO . putStrLn $ "Read " <> show (length examples) <> " examples."
-    keys <- for (runIdentity genCompConfigInputTrainingDataCSVFile) $ \fileName ->
-      P.runEffect . P.execStateP mempty $
-        Dataset.readCsv fileName
-          >-> Dataset.cache (^. Dataset.teTermPretty)
-          >-> P.drain
-    liftIO . putStrLn $ case keys of
-      Just ks -> "Read " <> show (length ks) <> " keys."
-      Nothing -> "Skipped reading keys."
-    P.runEffect $
-      Dataset.compositions examples (HashMap.keysSet <$> keys)
-        >-> Dataset.deduplicate (HashMap.keysSet examples) (^. Dataset.exSTLC2TermPretty)
-        >-> P.take (runIdentity genCompConfigNumberOfExampes)
-        >-> P.tee (showProgress $ runIdentity genCompConfigNumberOfExampes)
-        >-> Dataset.writeJsonLines (runIdentity genCompConfigOutputFolder </> runIdentity genCompConfigOutputDataFileName)
+  Tokenizers.withTokenizerFromConfigFile (runIdentity genCompConfigTokenizer) $ \tokenizer -> do
+    tokenizerSem <- MSem.new (1 :: Int)
+    let tokenize input = MSem.with tokenizerSem $ do
+          encoding <- Tokenizers.encode tokenizer input
+          Tokenizers.getIDs encoding
+    P.runSafeT $ do
+      saveAsJson (runIdentity genCompConfigOutputFolder </> runIdentity genCompConfigOutputConfigFileName) (Opts.Config . Opts.Comp $ config)
+      case runIdentity genCompConfigLanguage of
+        Opts.STLC2 -> go @'Opts.STLC2 tokenize
+        Opts.STLC3 -> go @'Opts.STLC3 tokenize
+        Opts.STLC3Eager -> go @'Opts.STLC3Eager tokenize
+        Opts.STLC3Lazy -> go @'Opts.STLC3Lazy tokenize
+  where
+    go :: forall l. Dataset.HasExamples l => Dataset.Tokenize -> P.SafeT IO ()
+    go tokenize = do
+      examples :: HashMap Text (Dataset.Example l) <-
+        P.runEffect . P.execStateP mempty $
+          Dataset.readJsonLines (runIdentity genCompConfigInputFolder </> runIdentity genCompConfigInputDataFileName)
+            >-> Dataset.cache (^. Dataset.prettyTerm)
+            >-> P.drain
+      liftIO . putStrLn $ "Read " <> show (length examples) <> " examples."
+      keys <- for (runIdentity genCompConfigInputTrainingDataCSVFile) $ \fileName ->
+        P.runEffect . P.execStateP mempty $
+          Dataset.readCsv fileName
+            >-> Dataset.cache (^. Dataset.teTermPretty)
+            >-> P.drain
+      liftIO . putStrLn $ case keys of
+        Just ks -> "Read " <> show (length ks) <> " keys."
+        Nothing -> "Skipped reading keys."
+      P.runEffect $
+        Dataset.compositions examples (HashMap.keysSet <$> keys)
+          >-> P.for P.cat (\(tm, tm', a) -> P.yield (tm, tm', uncurry Dataset.toExample' a))
+          -- >-> Dataset.deduplicate HashSet.empty (^. _3 . Dataset.prettyReducedTerm)
+          >-> Dataset.filterByMaxTokens tokenize (runIdentity genCompConfigMaxInputTokens) (Dataset.prettyTerms . (^. _3))
+          >-> Dataset.filterByMaxTokens tokenize (runIdentity genCompConfigMaxOutputTokens) (Dataset.prettyReducedTerms . (^. _3))
+          >-> Dataset.deduplicate (HashMap.keysSet examples) (^. _3 . Dataset.prettyTerm)
+          >-> Dataset.deduplicate' 3 HashMap.empty (\(tm, _, _) -> tm)
+          >-> Dataset.deduplicate' 3 HashMap.empty (\(_, tm', _) -> tm')
+          >-> P.take (runIdentity genCompConfigNumberOfExampes)
+          >-> P.tee (showProgress $ runIdentity genCompConfigNumberOfExampes)
+          >-> P.map (^. _3)
+          >-> Dataset.writeJsonLines (runIdentity genCompConfigOutputFolder </> runIdentity genCompConfigOutputDataFileName)
 
 saveAsJson :: forall m a. (P.MonadSafe m, ToJSON a) => FilePath -> a -> m ()
 saveAsJson file a = P.withFile file IO.WriteMode $ \h ->

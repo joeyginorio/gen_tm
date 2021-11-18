@@ -1,6 +1,7 @@
 { config ? {}
 , sourcesOverride ? {}
 , pkgs
+, tokenizers-haskell
 }:
 
 with pkgs;
@@ -18,6 +19,11 @@ let
     exactDeps = true;
 
     withHoogle = true;
+
+    shellHook = lib.strings.concatStringsSep "\n" [
+      # put tokenizers on path
+      "export LD_LIBRARY_PATH=\"$LD_LIBRARY_PATH:${tokenizers-haskell}/lib\""
+    ];
   };
 
 in

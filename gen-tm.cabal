@@ -28,6 +28,7 @@ custom-setup
 
 library
   exposed-modules:  Control.Monad.Fresh
+                  , Language.Eagerness
                   , Language.STLC1
                   , Language.STLC2
                   , Language.STLC2.Gen
@@ -37,16 +38,26 @@ library
                   , Language.STLC3
                   , Language.STLC3.Sample
                   , Language.STLC3.ToLC2
+                  , Language.STLC3.ToSTLC3Eager
+                  , Language.STLC3Eager
+                  , Language.STLC3Eager.Sample
+                  , Language.STLC3Eager.ToLCEager
+                  , Language.STLC3Eager.ToSTLC3
                   , Language.CL
                   , Language.LC
+                  , Language.LC.ToLCEager
+                  , Language.LCEager
+                  , Language.LCEager.ToLC
                   , Language.LC2
                   , Language.LC2.ToLC
                   , Paths_gen_tm
   autogen-modules:  Paths_gen_tm
   build-depends:    aeson >= 1.5.6.0
                   , base
+                  , bound
                   , bytestring >= 0.10.12.0
                   , containers
+                  , deriving-compat
                   , hashable
                   , hedgehog
                   , lens
@@ -56,6 +67,7 @@ library
                   , pipes >= 4.3.16
                   , pipes-bytestring >= 2.1.7
                   , pipes-safe >= 2.3.3
+                  , singletons < 3
                   , template-haskell
                   , text >= 1.2.4.1
                   , transformers
@@ -90,8 +102,10 @@ executable gen-tm
                   , pipes-bytestring >= 2.1.7
                   , pipes-safe >= 2.3.3
                   , pipes-csv
+                  , SafeSemaphore
                   , terminal-progress-bar
                   , text
+                  , tokenizers
                   , transformers
                   , unordered-containers
   default-language: Haskell2010
@@ -107,6 +121,10 @@ test-suite spec
                   , Language.STLC3Spec
                   , Language.STLC3.ToLC2Spec
                   , Language.LC2.ToLCSpec
+                  , Language.LCEager.ToLCSpec
+                  , Language.STLC3Eager.ToLCEagerSpec
+                  , Language.STLC3Eager.ToSTLC3Spec
+                  , Language.STLC3EagerSpec
   build-depends:    QuickCheck
                   , base
                   , bytestring >= 0.10.12.0
@@ -116,7 +134,10 @@ test-suite spec
                   , hedgehog-quickcheck
                   , hspec
                   , hspec-hedgehog
+                  , lens
+                  , lifted-async
                   , mmorph
+                  , monad-control
                   , mtl
                   , pipes >= 4.3.16
                   , pipes-bytestring >= 2.1.7

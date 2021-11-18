@@ -6,9 +6,9 @@
 
 module Language.STLC3Spec where
 
-import Control.Monad.Reader
-import Hedgehog (Property, checkParallel, discover, forAll, property, (===), diff)
-import Language.STLC3
+import Control.Monad.Reader (ReaderT (runReaderT))
+import Hedgehog (Property, checkParallel, diff, discover, forAll, property, (===))
+import Language.STLC3 (eval', pprintTerm, pprintType, tyCheck)
 import qualified Language.STLC3.Sample as Sample
 
 prop_welltyped :: Property
@@ -28,13 +28,20 @@ prop_welltypedNormalForm =
     let ety' = runReaderT (tyCheck tm') []
     Right ty === ety'
 
-prop_prettyNoNewlines :: Property
-prop_prettyNoNewlines =
+prop_prettyTyNoNewlines :: Property
+prop_prettyTyNoNewlines =
+  property $ do
+    ty <- forAll Sample.genTy
+    let prettyTy = pprintType ty
+    diff prettyTy (flip notElem) '\n'
+
+prop_prettyTmNoNewlines :: Property
+prop_prettyTmNoNewlines =
   property $ do
     ty <- forAll Sample.genTy
     tm <- forAll (Sample.genWellTypedExp ty)
-    let pretty = pprintTerm tm
-    diff pretty (flip notElem) '\n'
+    let prettyTm = pprintTerm tm
+    diff prettyTm (flip notElem) '\n'
 
 testSTLC3 :: IO Bool
 testSTLC3 = checkParallel $$(discover)

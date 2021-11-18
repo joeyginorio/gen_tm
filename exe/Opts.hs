@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -60,7 +61,7 @@ deriving stock instance (Barbie.AllBF Show f Command) => Show (Command f)
 deriving stock instance (Barbie.AllBF Eq f Command) => Eq (Command f)
 
 commandCustomJSONOptions :: Aeson.Options
-commandCustomJSONOptions = Aeson.defaultOptions {Aeson.fieldLabelModifier = drop 6}
+commandCustomJSONOptions = Aeson.defaultOptions
 
 instance (Barbie.AllBF Aeson.FromJSON f Command) => Aeson.FromJSON (Command f) where
   parseJSON = Aeson.genericParseJSON commandCustomJSONOptions
@@ -69,13 +70,30 @@ instance (Barbie.AllBF Aeson.ToJSON f Command) => Aeson.ToJSON (Command f) where
   toJSON = Aeson.genericToJSON commandCustomJSONOptions
   toEncoding = Aeson.genericToEncoding commandCustomJSONOptions
 
+data Language = STLC2 | STLC3 | STLC3Eager | STLC3Lazy
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (Aeson.FromJSON, Aeson.ToJSON)
+
+language :: Options.ReadM Language
+language =
+  Options.str >>= \case
+    "stlc2" -> return STLC2
+    "stlc3" -> return STLC3
+    "stlc3-eager" -> return STLC3Eager
+    "stlc3-lazy" -> return STLC3Lazy
+    (_ :: String) -> Options.readerError "Accepted languages are: stlc2, stlc3, stlc3-eager, and stlc3-lazy"
+
 data GenTmConfig f = GenTmConfig
   { genTmConfigOutputFolder :: !(f FilePath),
     genTmConfigOutputDataFileName :: !(f FilePath),
     genTmConfigOutputHistogramFileName :: !(f FilePath),
     genTmConfigOutputConfigFileName :: !(f FilePath),
     genTmConfigNumberOfExampes :: !(f Int),
-    genTmConfigSeed :: !(f Gen.Seed)
+    genTmConfigSeed :: !(f Gen.Seed),
+    genTmConfigLanguage :: !(f Language),
+    genTmConfigTokenizer :: !(f FilePath),
+    genTmConfigMaxInputTokens :: !(f Int),
+    genTmConfigMaxOutputTokens :: !(f Int)
   }
   deriving stock (Generic)
   deriving anyclass (Barbie.FunctorB, Barbie.TraversableB, Barbie.ApplicativeB, Barbie.ConstraintsB)
@@ -91,7 +109,7 @@ instance (Alternative f) => Monoid (GenTmConfig f) where
   mempty = Barbie.bpure empty
 
 genTmConfigCustomJSONOptions :: Aeson.Options
-genTmConfigCustomJSONOptions = Aeson.defaultOptions {Aeson.fieldLabelModifier = drop 6}
+genTmConfigCustomJSONOptions = Aeson.defaultOptions {Aeson.fieldLabelModifier = drop 11}
 
 instance (Barbie.AllBF Aeson.FromJSON f GenTmConfig) => Aeson.FromJSON (GenTmConfig f) where
   parseJSON = Aeson.genericParseJSON genTmConfigCustomJSONOptions
@@ -107,7 +125,11 @@ data GenCompConfig f = GenCompConfig
     genCompConfigInputFolder :: !(f FilePath),
     genCompConfigInputDataFileName :: !(f FilePath),
     genCompConfigInputTrainingDataCSVFile :: !(f (Maybe FilePath)),
-    genCompConfigNumberOfExampes :: !(f Int)
+    genCompConfigNumberOfExampes :: !(f Int),
+    genCompConfigLanguage :: !(f Language),
+    genCompConfigTokenizer :: !(f FilePath),
+    genCompConfigMaxInputTokens :: !(f Int),
+    genCompConfigMaxOutputTokens :: !(f Int)
   }
   deriving stock (Generic)
   deriving anyclass (Barbie.FunctorB, Barbie.TraversableB, Barbie.ApplicativeB, Barbie.ConstraintsB)
@@ -123,7 +145,7 @@ instance (Alternative f) => Monoid (GenCompConfig f) where
   mempty = Barbie.bpure empty
 
 genCompConfigCustomJSONOptions :: Aeson.Options
-genCompConfigCustomJSONOptions = Aeson.defaultOptions {Aeson.fieldLabelModifier = drop 6}
+genCompConfigCustomJSONOptions = Aeson.defaultOptions {Aeson.fieldLabelModifier = drop 13}
 
 instance (Barbie.AllBF Aeson.FromJSON f GenCompConfig) => Aeson.FromJSON (GenCompConfig f) where
   parseJSON = Aeson.genericParseJSON genCompConfigCustomJSONOptions
@@ -191,7 +213,31 @@ genTmConfigParser = Barbie.bmap (Compose . optional) parser
                       <> Options.short 's'
                       <> Options.metavar "SEED"
                       <> Options.help "Seed"
-                  )
+                  ),
+            genTmConfigLanguage =
+              Options.option language $
+                Options.long "language"
+                  <> Options.short 'l'
+                  <> Options.metavar "LANGUAGE"
+                  <> Options.help "Language (stlc2, stlc3, stlc3-eager, stlc3-lazy)",
+            genTmConfigTokenizer =
+              Options.strOption $
+                Options.long "tokenizer"
+                  <> Options.short 'T'
+                  <> Options.metavar "TOKENIZER"
+                  <> Options.help "Tokenizer",
+            genTmConfigMaxInputTokens =
+              Options.option Options.auto $
+                Options.long "max-input-tokens"
+                  <> Options.short 'm'
+                  <> Options.metavar "MAX_INPUT_TOKENS"
+                  <> Options.help "Max input tokens",
+            genTmConfigMaxOutputTokens =
+              Options.option Options.auto $
+                Options.long "max-output-tokens"
+                  <> Options.short 'M'
+                  <> Options.metavar "MAX_OUTPUT_TOKENS"
+                  <> Options.help "Max output tokens"
           }
 
 genCompConfigParser :: Config (Options.Parser `Compose` Maybe)
@@ -241,7 +287,31 @@ genCompConfigParser = Barbie.bmap (Compose . optional) parser
                 Options.long "number-of-examples"
                   <> Options.short 'n'
                   <> Options.metavar "NUMBER_OF_EXAMPLES"
-                  <> Options.help "Number of examples"
+                  <> Options.help "Number of examples",
+            genCompConfigLanguage =
+              Options.option language $
+                Options.long "language"
+                  <> Options.short 'l'
+                  <> Options.metavar "LANGUAGE"
+                  <> Options.help "Language (stlc2, stlc3, stlc3-eager, stlc3-lazy)",
+            genCompConfigTokenizer =
+              Options.strOption $
+                Options.long "tokenizer"
+                  <> Options.short 'T'
+                  <> Options.metavar "TOKENIZER"
+                  <> Options.help "Tokenizer",
+            genCompConfigMaxInputTokens =
+              Options.option Options.auto $
+                Options.long "max-input-tokens"
+                  <> Options.short 'm'
+                  <> Options.metavar "MAX_INPUT_TOKENS"
+                  <> Options.help "Max input tokens",
+            genCompConfigMaxOutputTokens =
+              Options.option Options.auto $
+                Options.long "max-output-tokens"
+                  <> Options.short 'M'
+                  <> Options.metavar "MAX_OUTPUT_TOKENS"
+                  <> Options.help "Max output tokens"
           }
 
 parserInfo ::
@@ -266,7 +336,7 @@ command :: Options.Parser (Config Maybe, Maybe FilePath)
 command =
   Options.hsubparser $
     commandOpts "tm" genTmConfigParser "Generate terms"
-      <> commandOpts "comp" genCompConfigParser "Generate compositons of terms"
+      <> commandOpts "comp" genCompConfigParser "Generate compositions of terms"
   where
     commandOpts cmd parser desc = Options.command cmd $ parserInfo parser desc
 
@@ -285,7 +355,11 @@ genTmConfigErrors =
       genTmConfigOutputHistogramFileName = "output histogram file name",
       genTmConfigOutputConfigFileName = "output config file name",
       genTmConfigNumberOfExampes = "number of examples",
-      genTmConfigSeed = "seed"
+      genTmConfigSeed = "seed",
+      genTmConfigLanguage = "language",
+      genTmConfigTokenizer = "tokenizer",
+      genTmConfigMaxInputTokens = "max input tokens",
+      genTmConfigMaxOutputTokens = "max output tokens"
     }
 
 genCompConfigErrors :: GenCompConfig (Const String)
@@ -297,7 +371,11 @@ genCompConfigErrors =
       genCompConfigInputFolder = "input folder",
       genCompConfigInputDataFileName = "input data file name",
       genCompConfigInputTrainingDataCSVFile = "input training data CSV file",
-      genCompConfigNumberOfExampes = "number of examples"
+      genCompConfigNumberOfExampes = "number of examples",
+      genCompConfigLanguage = "language",
+      genCompConfigTokenizer = "tokenizer",
+      genCompConfigMaxInputTokens = "max input tokens",
+      genCompConfigMaxOutputTokens = "max output tokens"
     }
 
 validate ::

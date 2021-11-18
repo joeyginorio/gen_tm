@@ -8,8 +8,8 @@
 module Language.STLC2.Sample where
 
 import Control.Applicative (Alternative (empty, (<|>)))
-import Control.Monad.Fresh (FreshT (..), runFreshT)
-import Control.Monad.Reader (MonadReader (ask, local), MonadTrans (..), ReaderT (runReaderT), runReader)
+import Control.Monad.Fresh (FreshT (..), Successor (..), runFreshT)
+import Control.Monad.Reader (MonadReader (ask, local), MonadTrans (..), ReaderT (runReaderT), asks, runReader)
 import Control.Monad.State (MonadState (get, put), StateT, modify)
 import Control.Monad.Trans.Writer.Lazy (WriterT (runWriterT))
 import Data.Bool (bool)
@@ -27,7 +27,7 @@ import qualified Hedgehog.Internal.Seed as Seed
 import qualified Hedgehog.Internal.Tree as Tree
 import qualified Language.STLC2 as STLC2
 
-type GenM = ReaderT (Map STLC2.Type [STLC2.Term]) (FreshT Gen)
+type GenM = ReaderT (Map STLC2.Type [STLC2.Term]) (FreshT Int Gen)
 
 genTy :: forall m. MonadGen m => m STLC2.Type
 genTy =
@@ -79,7 +79,8 @@ genWellTypedExp'' (STLC2.TyFun ty ty') = do
 freshVar :: GenM STLC2.Id
 freshVar = lift . FreshT $ do
   i <- get
-  modify succ
+  s <- asks suc
+  modify s
   pure (Text.pack $ 'x' : show i)
 
 insertVar :: STLC2.Id -> STLC2.Type -> Map STLC2.Type [STLC2.Term] -> Map STLC2.Type [STLC2.Term]

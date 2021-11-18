@@ -22,9 +22,13 @@
       url = "github:input-output-hk/iohk-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    tokenizers = {
+      url = "github:hasktorch/tokenizers/flakes";
+      inputs.utils.follows = "haskell-nix/flake-utils";
+    };
   };
 
-  outputs = { self, nixpkgs, haskell-nix, utils, iohkNix, ... }:
+  outputs = { self, nixpkgs, haskell-nix, utils, iohkNix, tokenizers, ... }:
     let
       inherit (nixpkgs) lib;
       inherit (lib) mapAttrs getAttrs attrNames;
@@ -67,6 +71,8 @@
           commonLib = lib
             // iohkNix.lib;
         })
+
+        tokenizers.overlay
 
         (final: prev: {
           gen-tm-project =
@@ -113,9 +119,7 @@
 
         inherit (pkgs.commonLib) eachEnv environments;
 
-        devShell =  import ./shell.nix {
-          inherit pkgs;
-        };
+        devShell =  pkgs.callPackage ./shell.nix {};
 
         flake = pkgs.gen-tm-project.flake {};
 
